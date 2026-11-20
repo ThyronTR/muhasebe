@@ -509,7 +509,8 @@ VIEWS.ayar = () => `
   <div class="list">${data.categories.map((c, i) => `<div class="item"><div class="t"><b>${esc(c)}</b></div><button class="btn ghost" style="padding:4px 10px" data-catdel="${i}">Sil</button></div>`).join('')}</div>
   <form id="catForm" class="row" style="margin-top:8px"><input name="c" placeholder="Yeni kategori" required><button class="btn">Ekle</button></form>
   <h2>Yedek</h2>
-  <div class="btns"><button class="btn ghost" id="bkDown">Yedeği indir (JSON)</button><label class="btn ghost" style="margin:0;color:var(--fg)">Yedekten yükle<input type="file" id="bkUp" accept=".json" hidden></label></div>`;
+  <div class="btns"><button class="btn ghost" id="bkDown">Yedeği indir (JSON)</button><label class="btn ghost" style="margin:0;color:var(--fg)">Yedekten yükle<input type="file" id="bkUp" accept=".json" hidden></label></div>
+  <p class="muted" style="text-align:center;margin-top:24px"><a href="gizlilik.html">Gizlilik Politikası</a> · <a href="kosullar.html">Kullanım Koşulları</a></p>`;
 async function loadInvites() {
   const box = $('#invList'); if (!box) return;
   try {
