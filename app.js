@@ -674,6 +674,9 @@ const gConnected = () => !!gStatus?.connected;
 function gBoxHtml() {
   if (!gStatus) return '<span class="muted">Durum yükleniyor…</span>';
   if (!gStatus.available) return '<span class="muted">Google bağlantısı henüz hazır değil.</span>';
+  if (gStatus.needsReconnect) return `<div><b class="gider">Bağlantı koptu</b> <span class="pill bad">eşitlenmiyor</span></div>
+    <p class="muted">Google izni kaldırıldığı için yeni değişiklikler takvime gitmiyor. Takvimdeki mevcut etkinlikler duruyor; yeniden bağlanınca aynı “Muhasebe” takvimi kaldığı yerden güncellenir.</p>
+    <button class="btn" id="gConnect">Yeniden bağlan</button>`;
   if (!gStatus.connected) return `<p class="muted" style="margin-top:0">Bağlanınca sigorta, kasko, muayene tarihleri ve taksit ödeme günleri Google Takvim’inde ayrı bir <b>“Muhasebe”</b> takvimine otomatik eklenir; değişiklikler ve silmeler de yansır. Uygulama yalnızca kendi oluşturduğu bu takvime erişir.</p>
     <button class="btn" id="gConnect">Google Takvim’i bağla</button>`;
   return `<div class="row"><div><b>Bağlı</b> <span class="pill good">otomatik</span><div class="muted">${esc(gStatus.email || '')}${gStatus.lastSync ? ' · son eşitleme ' + new Date(gStatus.lastSync).toLocaleString('tr-TR') : ''}</div>
