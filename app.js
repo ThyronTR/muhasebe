@@ -251,7 +251,7 @@ VIEWS.harcama = () => {
   const alacak = data.expenses.filter(x => x.source === 'cep' && !x.reimbursed);
   let lastDay = '';
   return `
-  <div class="row"><input type="month" id="exMonth" value="${state.month}" style="max-width:190px"><button class="btn ghost" id="exCsv">CSV indir</button></div>
+  <div class="row"><input type="month" id="exMonth" value="${state.month}" style="max-width:190px"><div class="btns" style="margin:0"><button class="btn" id="exXlsx">Masraf formu (Excel)</button><button class="btn ghost" id="exCsv">CSV</button></div></div>
   <div class="tiles" style="margin-top:10px">
     <div class="tile"><div class="h">Cebimden</div><div class="v gider">${tl(sum('cep'))}</div></div>
     <div class="tile"><div class="h">Şirket kartı</div><div class="v transfer">${tl(sum('kart'))}</div></div>
@@ -307,6 +307,41 @@ document.addEventListener('click', e => {
   }
 });
 document.addEventListener('change', e => { if (e.target.id === 'exMonth' && e.target.value) { state.month = e.target.value; render(); } });
+
+/* Şirket masraf formu (xlsx) */
+const loadScript = src => new Promise((ok, fail) => { if (document.querySelector(`script[src="${src}"]`)) return ok(); const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => fail(new Error('Yüklenemedi: ' + src)); document.head.appendChild(s); });
+function masrafForm() {
+  const p = data.profile || {};
+  const list = data.expenses.filter(x => x.date.startsWith(state.month));
+  const cnt = s => list.filter(x => x.source === s).length;
+  if (!list.length) return toast('Bu ay harcama yok');
+  openDlg(`<form id="mfForm"><h3 style="margin:0">Masraf formu · ${fmtMonth(state.month)}</h3>
+    <p class="muted">Şirketin “TEMA MASRAF FORMU” şablonu doldurulur. Şirket kartı → <b>K.Kartı Masraf</b>, cebimden → <b>Nakit Masraf</b>.</p>
+    <label>Masrafı yapan (ad soyad)</label><input name="name" required value="${esc(p.fullName || '')}" placeholder="Ad Soyad">
+    <label>Hangi harcamalar?</label><select name="which">
+      ${opt('hepsi', `Hepsi (${list.length})`, 'hepsi')}${opt('kart', `Sadece şirket kartı (${cnt('kart')})`)}${opt('cep', `Sadece cebimden (${cnt('cep')})`)}${opt('alinmadi', `Cebimden, geri alınmamış (${list.filter(x => x.source === 'cep' && !x.reimbursed).length})`)}</select>
+    <button class="btn block">Excel’i indir</button><div class="btns"><button type="button" class="btn ghost" data-close>Vazgeç</button></div></form>`);
+  $('#mfForm').onsubmit = async ev => {
+    ev.preventDefault(); const f = new FormData(ev.target);
+    const name = f.get('name').trim(), which = f.get('which');
+    const rows = list.filter(x => which === 'hepsi' || (which === 'alinmadi' ? x.source === 'cep' && !x.reimbursed : x.source === which));
+    if (!rows.length) return toast('Seçime uyan harcama yok');
+    if (name !== p.fullName) { data.profile = { ...p, fullName: name }; commit(); }
+    const btn = ev.target.querySelector('.btn.block'); btn.disabled = true; btn.textContent = 'Hazırlanıyor…';
+    try {
+      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
+      await loadScript('masraf.js?v=1');
+      const tpl = await (await fetch('sablon/masraf-formu.xlsx?v=1')).arrayBuffer();
+      const z = await Masraf.fill(JSZip, tpl, { name, rows: Masraf.rowsFromExpenses(rows) });
+      const blob = await z.generateAsync({ type: 'blob', compression: 'DEFLATE', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const ay = new Date(state.month + '-01T00:00').toLocaleDateString('tr-TR', { month: 'long' });
+      const fname = `${name} ${ay.charAt(0).toLocaleUpperCase('tr-TR') + ay.slice(1)} Ayı Masraf Formu.xlsx`;
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = fname; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      closeDlg(); toast(fname + ' indirildi');
+    } catch (err) { toast('Form oluşturulamadı: ' + err.message); btn.disabled = false; btn.textContent = 'Excel’i indir'; }
+  };
+}
+document.addEventListener('click', e => { if (e.target.closest('#exXlsx')) masrafForm(); });
 function download(name, text, type) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); }
 
 /* --- Yatırım --- */
