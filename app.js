@@ -217,6 +217,7 @@ const TITLES = { ana: 'Ana Sayfa', harcama: 'Harcamalar', yatirim: 'Yatırım', 
 function render() {
   $('#title').textContent = TITLES[state.tab];
   $$('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === state.tab));
+  document.body.dataset.tab = state.tab; // menü rengi: başlık, sekme, ＋ düğmesi
   if (!session) return;
   $('#view').innerHTML = VIEWS[state.tab]();
   if (state.tab === 'ayar') { loadInvites(); loadGoogle(); loadIcs(); }
@@ -408,11 +409,14 @@ VIEWS.yatirim = () => {
   const hasMetal = data.gold.some(x => !isFx(x.type)), hasFx = data.gold.some(x => isFx(x.type));
   const qtyText = x => isFx(x.type) ? new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 2 }).format(x.qty) + ' ' + x.type : '× ' + String(x.qty).replace('.', ',');
   const rate = v => new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: v < 1 ? 4 : 2 }).format(v);
+  // Renkler: altın sarı, gümüş gri, dolar yeşil, euro kahverengi, sterlin mavi, frank kırmızı, diğer dövizler camgöbeği
+  const holdColor = t => ({ USD: 'var(--usd)', EUR: 'var(--eur)', GBP: 'var(--gbp)', CHF: 'var(--chf)', GUMUS: 'var(--muted)' })[t] || (isFx(t) ? 'var(--fx)' : 'var(--gold)');
+  const chg = c => `<span class="${c >= 0 ? 'up' : 'down'}">${c >= 0 ? '▲' : '▼'} %${Math.abs(c).toLocaleString('tr-TR')}</span>`;
   const holdRow = x => { const p = prices?.items[x.type]; const fx = isFx(x.type); return `
-      <div class="item" data-gold="${x.id}"><div class="ic" style="color:${fx ? 'var(--in)' : '#d4a017'}">${fx ? (FX_SYMBOL[x.type] || x.type.slice(0, 1)) : '◆'}</div>
-        <div class="t"><b>${fx ? esc(FX_TYPES[x.type]) : esc(METAL_TYPES[x.type])} ${qtyText(x)}</b><small>${p ? (fx ? 'Kur ' : 'Birim ') + rate(p.buy) + ' · ' + (p.change >= 0 ? '▲' : '▼') + Math.abs(p.change) + '%' : ''}${x.note ? ' · ' + esc(x.note) : ''}</small></div>
+      <div class="item" data-gold="${x.id}"><div class="ic" style="color:${holdColor(x.type)}">${fx ? (FX_SYMBOL[x.type] || x.type.slice(0, 1)) : '◆'}</div>
+        <div class="t"><b>${fx ? esc(FX_TYPES[x.type]) : esc(METAL_TYPES[x.type])} ${qtyText(x)}</b><small>${p ? (fx ? 'Kur ' : 'Birim ') + rate(p.buy) + ' · ' + chg(p.change) : ''}${x.note ? ' · ' + esc(x.note) : ''}</small></div>
         <div class="amt">${p ? tl(goldValue(x)) : '…'}</div></div>`; };
-  const market = (types, title) => `<div class="muted" style="margin:6px 0 2px;font-weight:600">${title}</div>` + Object.keys(types).filter(k => prices.items[k]).map(k => `<div class="kv"><span>${isFx(k) ? k + ' · ' + types[k] : types[k]}</span><span>${rate(prices.items[k].buy)} / ${rate(prices.items[k].sell)}</span></div>`).join('');
+  const market = (types, title, cls) => `<div class="subhead ${cls}">${title}</div>` + Object.keys(types).filter(k => prices.items[k]).map(k => `<div class="kv"><span><b style="color:${holdColor(k)}">${isFx(k) ? (FX_SYMBOL[k] || '') + ' ' + k : '◆'}</b> ${types[k]}</span><span>${rate(prices.items[k].buy)} / ${rate(prices.items[k].sell)} ${chg(prices.items[k].change)}</span></div>`).join('');
   return `
   <h2>Altın & Döviz</h2>
   <div class="card">
@@ -426,7 +430,7 @@ VIEWS.yatirim = () => {
     ${data.gold.length ? [...data.gold].sort((a, b) => isFx(a.type) - isFx(b.type)).map(holdRow).join('') : '<div class="empty">Henüz altın ya da döviz eklenmedi.</div>'}
   </div>
   <div class="btns"><button class="btn" id="goldAdd" data-kind="metal">＋ Altın / gümüş ekle</button><button class="btn" id="fxAdd">＋ Döviz ekle</button></div>
-  ${prices ? `<h2>Piyasa</h2><div class="card">${market(METAL_TYPES, 'Altın & gümüş')}${market(FX_TYPES, 'Döviz')}<div class="muted" style="margin-top:6px">Alış / satış (TL)</div></div>` : ''}
+  ${prices ? `<h2>Piyasa</h2><div class="card">${market(METAL_TYPES, 'Altın & gümüş', 'gold')}${market(FX_TYPES, 'Döviz', 'fx')}<div class="muted" style="margin-top:6px">Alış / satış (TL)</div></div>` : ''}
   <h2>Yatırım notları</h2>
   ${data.notes.length ? `<div class="list">${[...data.notes].sort((a, b) => b.date.localeCompare(a.date)).map(n => `
     <div class="item" data-note="${n.id}"><div class="ic">✎</div><div class="t"><b>${esc(n.title)}</b><small>${fmtDate(n.date)} · ${esc(n.body.slice(0, 70))}</small></div></div>`).join('')}</div>` : '<div class="card empty">Not yok.</div>'}
