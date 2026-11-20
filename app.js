@@ -989,6 +989,24 @@ document.addEventListener('click', e => {
   if (announcements[0]) { store(annSeenKey(), announcements[0].created_at); $('#bellBadge').hidden = true; }
 });
 
+/* ========== Otomatik güncelleme ==========
+   GitHub Pages sayfayı 10 dk önbellekte tutar; telefon eski sürümde kalmasın diye index.html'deki
+   sürüm numarasını önbelleksiz kontrol et, değiştiyse (form açık ve kaydedilmemiş değişiklik yoksa) yenile. */
+const MY_VER = (document.querySelector('script[src^="app.js"]')?.getAttribute('src').match(/v=(\d+)/) || [])[1];
+async function checkUpdate() {
+  if (!MY_VER) return;
+  try {
+    const html = await (await fetch('./?nocache=' + Date.now(), { cache: 'no-store' })).text();
+    const v = (html.match(/app\.js\?v=(\d+)/) || [])[1];
+    if (!v || v === MY_VER) return;
+    if (dlg.open || dirty) { setTimeout(checkUpdate, 30e3); return; }
+    toast('Yeni sürüm yükleniyor…'); setTimeout(() => location.reload(), 600);
+  } catch {}
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkUpdate(); });
+setInterval(checkUpdate, 5 * 60e3);
+setTimeout(checkUpdate, 3000);
+
 /* ========== Başlat ========== */
 function boot() {
   document.body.classList.remove('authmode');
