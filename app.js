@@ -210,7 +210,7 @@ function render() {
   $$('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === state.tab));
   if (!session) return;
   $('#view').innerHTML = VIEWS[state.tab]();
-  if (state.tab === 'ayar') loadInvites();
+  if (state.tab === 'ayar') { loadInvites(); loadGoogle(); loadIcs(); }
   window.scrollTo(0, 0);
 }
 function go(tab) { state.tab = tab; render(); if (tab === 'yatirim' || tab === 'ana') fetchPrices(); }
@@ -462,7 +462,7 @@ function eventForm(a, x) {
     <label>Not</label><input name="note" value="${esc(e.note)}">
     ${e.history?.length ? `<label>Geçmiş</label><div class="card">${e.history.map(h => `<div class="kv"><span>${fmtDate(h.date)}</span><span>${h.cost ? tl(h.cost) : '—'}</span></div>`).join('')}</div>` : ''}
     <button class="btn block">Kaydet</button>
-    ${x ? `<div class="btns"><a class="btn ghost" target="_blank" rel="noopener" href="${esc(gcalUrl(a, e))}">📅 Google Takvim’e ekle</a><button type="button" class="btn ghost" id="evRenew">Yenilendi (+1 yıl)</button></div>` : ''}
+    ${x ? `<div class="btns">${gConnected() ? '<span class="muted">📅 Google Takvim’de otomatik</span>' : `<a class="btn ghost" target="_blank" rel="noopener" href="${esc(gcalUrl(a, e))}">📅 Google Takvim’e ekle</a>`}<button type="button" class="btn ghost" id="evRenew">Yenilendi (+1 yıl)</button></div>` : ''}
     <div class="btns">${x ? '<button type="button" class="btn danger" id="evDel">Sil</button>' : ''}<button type="button" class="btn ghost" data-close>Vazgeç</button></div></form>`);
   if ($('#evDel')) $('#evDel').onclick = () => { if (confirm('Silinsin mi?')) { a.events = a.events.filter(o => o.id !== x.id); closeDlg(); commit(); } };
   if ($('#evRenew')) $('#evRenew').onclick = () => {
@@ -474,6 +474,7 @@ function eventForm(a, x) {
     const rec = { kind: f.get('kind'), date: f.get('date'), cost: num(f.get('cost')) || null, company: f.get('company').trim(), note: f.get('note').trim() };
     if (x) { Object.assign(x, rec); closeDlg(); commit(); }
     else { const n = { id: uid(), history: [], ...rec }; a.events.push(n); commit();
+      if (gConnected()) { closeDlg(); return toast('Kaydedildi · Google Takvim’e otomatik eklenecek'); }
       openDlg(`<p><b>${esc(a.name)} · ${esc(n.kind)}</b> kaydedildi.</p><p class="muted">Her yıl hatırlatma için Google Takvim’ine ekle:</p>
         <div class="btns"><a class="btn" target="_blank" rel="noopener" href="${esc(gcalUrl(a, n))}" data-close>📅 Google Takvim’e ekle</a><button class="btn ghost" data-close>Şimdi değil</button></div>`); }
   };
@@ -500,6 +501,10 @@ VIEWS.ayar = () => `
       <button class="btn" style="grid-column:1/-1">Davet linki oluştur</button></form>
     <div id="invList" class="muted" style="margin-top:12px">Yükleniyor…</div>
   </div>` : ''}
+  <h2>Google Takvim</h2>
+  <div class="card" id="gBox">${gBoxHtml()}</div>
+  <h2>Takvim abonelik linki</h2>
+  <div class="card" id="icsBox"><span class="muted">Yükleniyor…</span></div>
   <h2>Harcama kategorileri</h2>
   <div class="list">${data.categories.map((c, i) => `<div class="item"><div class="t"><b>${esc(c)}</b></div><button class="btn ghost" style="padding:4px 10px" data-catdel="${i}">Sil</button></div>`).join('')}</div>
   <form id="catForm" class="row" style="margin-top:8px"><input name="c" placeholder="Yeni kategori" required><button class="btn">Ekle</button></form>
@@ -558,10 +563,75 @@ document.addEventListener('change', async e => {
   catch { toast('Geçersiz yedek dosyası'); }
 });
 
+/* ========== Google Takvim ========== */
+let gStatus = null;
+const gConnected = () => !!gStatus?.connected;
+function gBoxHtml() {
+  if (!gStatus) return '<span class="muted">Durum yükleniyor…</span>';
+  if (!gStatus.available) return '<span class="muted">Google bağlantısı henüz hazır değil.</span>';
+  if (!gStatus.connected) return `<p class="muted" style="margin-top:0">Bağlanınca sigorta, kasko, muayene tarihleri ve taksit ödeme günleri Google Takvim’inde ayrı bir <b>“Muhasebe”</b> takvimine otomatik eklenir; değişiklikler ve silmeler de yansır. Uygulama yalnızca kendi oluşturduğu bu takvime erişir.</p>
+    <button class="btn" id="gConnect">Google Takvim’i bağla</button>`;
+  return `<div class="row"><div><b>Bağlı</b> <span class="pill good">otomatik</span><div class="muted">${esc(gStatus.email || '')}${gStatus.lastSync ? ' · son eşitleme ' + new Date(gStatus.lastSync).toLocaleString('tr-TR') : ''}</div>
+    ${gStatus.lastError ? `<div class="gider" style="font-size:13px">Son hata: ${esc(gStatus.lastError)}</div>` : ''}</div></div>
+    <div class="btns"><button class="btn ghost" id="gSync">Şimdi eşitle</button><button class="btn ghost" id="gDisc">Bağlantıyı kes</button></div>`;
+}
+async function loadGoogle() {
+  try { gStatus = await api('/api/google/status'); } catch { gStatus = gStatus || { available: false }; }
+  const box = $('#gBox'); if (box) box.innerHTML = gBoxHtml();
+}
+document.addEventListener('click', async e => {
+  if (e.target.closest('#gConnect')) {
+    try { const { url } = await api('/api/google/start', { method: 'POST' }); if (dirty) await push(); location.href = url; } catch (err) { toast(err.message); }
+  }
+  if (e.target.closest('#gSync')) {
+    toast('Eşitleniyor…'); if (dirty) await push();
+    try { const r = await api('/api/google/sync', { method: 'POST' }); toast(r.error ? 'Hata: ' + r.error : `Takvim güncel (${r.created || 0} yeni, ${r.updated || 0} güncellendi, ${r.deleted || 0} silindi)`); } catch (err) { toast(err.message); }
+    loadGoogle();
+  }
+  if (e.target.closest('#gDisc') && confirm('Google Takvim bağlantısı kesilsin mi? (“Muhasebe” takvimi Google’da kalır, istersen oradan silebilirsin)')) {
+    try { await api('/api/google/disconnect', { method: 'POST' }); toast('Bağlantı kesildi'); } catch (err) { toast(err.message); }
+    loadGoogle();
+  }
+});
+
+/* ========== Takvim abonelik linki (ICS) ========== */
+const ICS_HELP = `<details style="margin-top:10px"><summary class="muted" style="cursor:pointer">Nasıl eklenir?</summary><div class="muted" style="margin-top:6px;line-height:1.6">
+  <b>Google Takvim</b> (bilgisayardan): calendar.google.com → sol menüde “Diğer takvimler” yanındaki <b>+</b> → <b>URL ile</b> → linki yapıştır → Takvim ekle.<br>
+  <b>iPhone</b>: Ayarlar → Takvim → Hesaplar → Hesap ekle → Diğer → <b>Takvim aboneliği ekle</b> → linki yapıştır.<br>
+  <b>Outlook</b>: Takvim → Takvim ekle → <b>Web’den abone ol</b> → linki yapıştır.<br>
+  Değişiklikler takvim uygulamasının yenileme sıklığına göre gelir (Google’da birkaç saat sürebilir).</div></details>`;
+async function loadIcs() {
+  const box = $('#icsBox'); if (!box) return;
+  try {
+    const { url } = await api('/api/ical');
+    box.innerHTML = url
+      ? `<p class="muted" style="margin-top:0">Bu linki Google, iPhone ya da Outlook takvimine “URL ile abone ol” diyerek ekle. Linki bilen herkes tarihlerini görebilir; kimseyle paylaşma.</p>
+        <input readonly value="${esc(url)}" onclick="this.select()">
+        <div class="btns"><button class="btn" data-copy="${esc(url)}">Linki kopyala</button><a class="btn ghost" href="${esc(url.replace(/^https:/, 'webcal:'))}">Takvimde aç</a><button class="btn ghost" id="icsNew">Yeni link (eskisi çalışmaz)</button><button class="btn ghost" id="icsOff">Kapat</button></div>${ICS_HELP}`
+      : `<p class="muted" style="margin-top:0">Google’a bağlanmadan, her takvim uygulamasında (Google, iPhone, Outlook) çalışan sana özel bir abonelik linki. Sigorta, kasko, muayene ve taksit tarihlerin bu takvimde görünür.</p>
+        <button class="btn" id="icsNew">Abonelik linki oluştur</button>${ICS_HELP}`;
+  } catch (e) { box.textContent = e.message; }
+}
+document.addEventListener('click', async e => {
+  const nw = e.target.closest('#icsNew');
+  if (nw && (nw.textContent.startsWith('Abonelik') || confirm('Yeni link oluşturulsun mu? Eski link artık çalışmaz, takvimlere yeniden eklemen gerekir.'))) {
+    try { if (dirty) await push(); await api('/api/ical', { method: 'POST' }); loadIcs(); toast('Link hazır'); } catch (err) { toast(err.message); }
+  }
+  if (e.target.closest('#icsOff') && confirm('Abonelik linki kapatılsın mı? Takvimlerdeki abonelik güncellenmeyi bırakır.')) {
+    try { await api('/api/ical', { method: 'DELETE' }); loadIcs(); } catch (err) { toast(err.message); }
+  }
+});
+
 /* ========== Başlat ========== */
 function boot() {
   document.body.classList.remove('authmode');
-  state.tab = 'ana'; render(); fetchPrices();
+  const gq = new URLSearchParams(location.search).get('google');
+  if (gq) {
+    history.replaceState(null, '', location.pathname);
+    toast({ tamam: 'Google Takvim bağlandı ✓', iptal: 'Google bağlantısı iptal edildi', izin: 'Takvim izni verilmedi, tekrar dene ve kutucuğu işaretle', gecersiz: 'Bağlantı süresi doldu, tekrar dene', hata: 'Google bağlantısı kurulamadı' }[gq] || 'Google');
+    state.tab = 'ayar';
+  } else state.tab = 'ana';
+  render(); fetchPrices(); loadGoogle();
   dirty ? push().then(pull) : pull();
 }
 if (session && !new URLSearchParams(location.search).get('davet')) { loadLocal(); boot(); }
