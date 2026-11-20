@@ -18,10 +18,20 @@ const store = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } ca
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 2600); }
 
 /* ========== Veri ========== */
-const GOLD_TYPES = {
+// Altın/gümüş ve dövizler: hepsi canlı fiyatla TL'ye çevrilir (veri alanı geriye uyum için "gold")
+const METAL_TYPES = {
   GRA: 'Gram altın (24 ayar)', HAS: 'Has altın (gram)', CEYREKALTIN: 'Çeyrek altın', YARIMALTIN: 'Yarım altın',
   TAMALTIN: 'Tam altın', CUMHURIYETALTINI: 'Cumhuriyet altını', ATAALTIN: 'Ata altın', GUMUS: 'Gümüş (gram)'
 };
+const FX_TYPES = {
+  USD: 'Amerikan doları', EUR: 'Euro', GBP: 'İngiliz sterlini', CHF: 'İsviçre frangı', CAD: 'Kanada doları', AUD: 'Avustralya doları',
+  JPY: 'Japon yeni', SAR: 'Suudi riyali', AED: 'BAE dirhemi', QAR: 'Katar riyali', KWD: 'Kuveyt dinarı', CNY: 'Çin yuanı',
+  RUB: 'Rus rublesi', DKK: 'Danimarka kronu', SEK: 'İsveç kronu', NOK: 'Norveç kronu', PLN: 'Polonya zlotisi', AZN: 'Azerbaycan manatı', GEL: 'Gürcistan larisi'
+};
+const FX_SYMBOL = { USD: '$', EUR: '€', GBP: '£', CHF: '₣', JPY: '¥', CNY: '¥', RUB: '₽', AZN: '₼', GEL: '₾' };
+const GOLD_TYPES = { ...METAL_TYPES, ...FX_TYPES };
+const isFx = t => t in FX_TYPES;
+const holdingLabel = t => isFx(t) ? `${t} · ${FX_TYPES[t]}` : (METAL_TYPES[t] || t);
 const ASSET_EVENTS = ['Trafik sigortası', 'Kasko', 'Muayene', 'MTV', 'Konut sigortası', 'DASK', 'Bakım', 'Diğer'];
 function defaultData() {
   return {
@@ -164,7 +174,6 @@ async function fetchPrices(force) {
     }
     const items = {};
     for (const k of Object.keys(GOLD_TYPES)) if (j[k] && j[k].Buying) items[k] = { buy: j[k].Buying, sell: j[k].Selling, change: j[k].Change };
-    if (j.USD) items.USD = { buy: j.USD.Buying, sell: j.USD.Selling, change: j.USD.Change };
     prices = { at: Date.now(), src: j.Update_Date, items }; store('mh_prices', prices);
     if (state.tab === 'yatirim' || state.tab === 'ana') render();
   } catch { if (force) toast('Fiyatlar alınamadı'); }
@@ -233,7 +242,7 @@ VIEWS.ana = () => {
   <div class="tiles">
     <div class="tile" data-tab="harcama"><div class="h"><span>₺</span>Bu ay harcama</div><div class="v">${tl(cep + kart)}</div><div class="s">Cebimden ${tl(cep)} · Kart ${tl(kart)}</div></div>
     <div class="tile" data-tab="harcama"><div class="h"><span>↩</span>Şirketten alacağım</div><div class="v">${tl(alacak)}</div><div class="s">Cebimden ödenen, geri alınmamış</div></div>
-    <div class="tile" data-tab="yatirim"><div class="h"><span>◆</span>Altın değeri</div><div class="v">${data.gold.length ? (prices ? tl(g.value) : '…') : '—'}</div><div class="s">${prices ? 'Güncel alış fiyatıyla' : 'Fiyat bekleniyor'}</div></div>
+    <div class="tile" data-tab="yatirim"><div class="h"><span>◆</span>Altın & döviz</div><div class="v">${data.gold.length ? (prices ? tl(g.value) : '…') : '—'}</div><div class="s">${prices ? 'Güncel alış fiyatıyla' : 'Fiyat bekleniyor'}</div></div>
     <div class="tile" data-tab="taksit"><div class="h"><span>▦</span>Bu ay taksit</div><div class="v">${tl(instMonth)}</div><div class="s">${inst.length ? (instLeft ? instLeft + ' ödeme bekliyor' : 'Hepsi ödendi') : 'Aktif taksit yok'}</div></div>
   </div>
   <h2>Yaklaşan yenilemeler (60 gün)</h2>
@@ -395,34 +404,42 @@ function download(name, text, type) { const a = document.createElement('a'); a.h
 /* --- Yatırım --- */
 VIEWS.yatirim = () => {
   const g = goldTotals(); const pl = g.value - g.cost;
+  const part = fx => data.gold.filter(x => isFx(x.type) === fx).reduce((s, x) => s + goldValue(x), 0);
+  const hasMetal = data.gold.some(x => !isFx(x.type)), hasFx = data.gold.some(x => isFx(x.type));
+  const qtyText = x => isFx(x.type) ? new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 2 }).format(x.qty) + ' ' + x.type : '× ' + String(x.qty).replace('.', ',');
+  const rate = v => new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: v < 1 ? 4 : 2 }).format(v);
+  const holdRow = x => { const p = prices?.items[x.type]; const fx = isFx(x.type); return `
+      <div class="item" data-gold="${x.id}"><div class="ic" style="color:${fx ? 'var(--in)' : '#d4a017'}">${fx ? (FX_SYMBOL[x.type] || x.type.slice(0, 1)) : '◆'}</div>
+        <div class="t"><b>${fx ? esc(FX_TYPES[x.type]) : esc(METAL_TYPES[x.type])} ${qtyText(x)}</b><small>${p ? (fx ? 'Kur ' : 'Birim ') + rate(p.buy) + ' · ' + (p.change >= 0 ? '▲' : '▼') + Math.abs(p.change) + '%' : ''}${x.note ? ' · ' + esc(x.note) : ''}</small></div>
+        <div class="amt">${p ? tl(goldValue(x)) : '…'}</div></div>`; };
+  const market = (types, title) => `<div class="muted" style="margin:6px 0 2px;font-weight:600">${title}</div>` + Object.keys(types).filter(k => prices.items[k]).map(k => `<div class="kv"><span>${isFx(k) ? k + ' · ' + types[k] : types[k]}</span><span>${rate(prices.items[k].buy)} / ${rate(prices.items[k].sell)}</span></div>`).join('');
   return `
-  <h2>Altın</h2>
+  <h2>Altın & Döviz</h2>
   <div class="card">
     <div class="row"><div><div class="muted">Toplam değer (alış fiyatıyla)</div><div class="big">${prices ? tl(g.value) : '…'}</div>
-      ${g.cost && g.costKnown ? `<div class="${pl >= 0 ? 'gelir' : 'gider'}">${pl >= 0 ? '+' : ''}${tl(pl)} (${((pl / g.cost) * 100).toFixed(1)}%)</div>` : ''}</div>
+      ${g.cost && g.costKnown ? `<div class="${pl >= 0 ? 'gelir' : 'gider'}">${pl >= 0 ? '+' : ''}${tl(pl)} (${((pl / g.cost) * 100).toFixed(1)}%)</div>` : ''}
+      ${prices && hasMetal && hasFx ? `<div class="muted">Altın/gümüş ${tl(part(false))} · Döviz ${tl(part(true))}</div>` : ''}</div>
       <button class="btn ghost" id="pxRefresh">Yenile</button></div>
     <div class="muted" style="margin-top:6px">${prices ? 'Fiyat: ' + esc(prices.src || new Date(prices.at).toLocaleString('tr-TR')) : 'Fiyatlar yükleniyor…'}</div>
   </div>
   <div class="list" style="margin-top:10px">
-    ${data.gold.length ? data.gold.map(x => { const p = prices?.items[x.type]; return `
-      <div class="item" data-gold="${x.id}"><div class="ic" style="color:#d4a017">◆</div>
-        <div class="t"><b>${esc(GOLD_TYPES[x.type])} × ${String(x.qty).replace('.', ',')}</b><small>${p ? 'Birim ' + tl(p.buy) + ' · ' + (p.change >= 0 ? '▲' : '▼') + Math.abs(p.change) + '%' : ''}${x.note ? ' · ' + esc(x.note) : ''}</small></div>
-        <div class="amt">${p ? tl(goldValue(x)) : '…'}</div></div>`; }).join('') : '<div class="empty">Henüz altın eklenmedi.</div>'}
+    ${data.gold.length ? [...data.gold].sort((a, b) => isFx(a.type) - isFx(b.type)).map(holdRow).join('') : '<div class="empty">Henüz altın ya da döviz eklenmedi.</div>'}
   </div>
-  <div class="btns"><button class="btn" id="goldAdd">＋ Altın ekle</button></div>
-  ${prices ? `<h2>Piyasa</h2><div class="card">${Object.keys(GOLD_TYPES).filter(k => prices.items[k]).map(k => `<div class="kv"><span>${GOLD_TYPES[k]}</span><span>${tl(prices.items[k].buy)} / ${tl(prices.items[k].sell)}</span></div>`).join('')}
-    ${prices.items.USD ? `<div class="kv"><span>Dolar</span><span>${tl(prices.items.USD.buy)} / ${tl(prices.items.USD.sell)}</span></div>` : ''}<div class="muted" style="margin-top:6px">Alış / satış</div></div>` : ''}
+  <div class="btns"><button class="btn" id="goldAdd" data-kind="metal">＋ Altın / gümüş ekle</button><button class="btn" id="fxAdd">＋ Döviz ekle</button></div>
+  ${prices ? `<h2>Piyasa</h2><div class="card">${market(METAL_TYPES, 'Altın & gümüş')}${market(FX_TYPES, 'Döviz')}<div class="muted" style="margin-top:6px">Alış / satış (TL)</div></div>` : ''}
   <h2>Yatırım notları</h2>
   ${data.notes.length ? `<div class="list">${[...data.notes].sort((a, b) => b.date.localeCompare(a.date)).map(n => `
     <div class="item" data-note="${n.id}"><div class="ic">✎</div><div class="t"><b>${esc(n.title)}</b><small>${fmtDate(n.date)} · ${esc(n.body.slice(0, 70))}</small></div></div>`).join('')}</div>` : '<div class="card empty">Not yok.</div>'}
   <div class="btns"><button class="btn ghost" id="noteAdd">＋ Not ekle</button></div>`;
 };
-function goldForm(x) {
-  const e = x || { type: 'GRA', qty: '', unitCost: '', date: today(), note: '' };
-  openDlg(`<form id="gForm"><h3 style="margin:0">${x ? 'Altını düzenle' : 'Altın ekle'}</h3>
-    <label>Tür</label><select name="type">${Object.entries(GOLD_TYPES).map(([k, v]) => opt(k, v, e.type)).join('')}</select>
-    <div class="two"><div><label>Adet / gram</label><input name="qty" inputmode="decimal" required value="${e.qty}"></div>
-      <div><label>Alış birim fiyatı (ops.)</label><input name="unitCost" inputmode="decimal" value="${e.unitCost || ''}" placeholder="₺"></div></div>
+function goldForm(x, kind) {
+  const fx = x ? isFx(x.type) : kind === 'fx';
+  const e = x || { type: fx ? 'USD' : 'GRA', qty: '', unitCost: '', date: today(), note: '' };
+  const types = fx ? FX_TYPES : METAL_TYPES;
+  openDlg(`<form id="gForm"><h3 style="margin:0">${fx ? (x ? 'Dövizi düzenle' : 'Döviz ekle') : (x ? 'Altını düzenle' : 'Altın / gümüş ekle')}</h3>
+    <label>${fx ? 'Döviz' : 'Tür'}</label><select name="type">${Object.entries(types).map(([k, v]) => opt(k, fx ? `${k} · ${v}` : v, e.type)).join('')}</select>
+    <div class="two"><div><label>${fx ? 'Miktar' : 'Adet / gram'}</label><input name="qty" inputmode="decimal" required value="${e.qty}" placeholder="${fx ? 'ör. 1500' : ''}"></div>
+      <div><label>${fx ? 'Alış kuru (ops.)' : 'Alış birim fiyatı (ops.)'}</label><input name="unitCost" inputmode="decimal" value="${e.unitCost || ''}" placeholder="₺"></div></div>
     <label>Alış tarihi</label><input type="date" name="date" value="${e.date}">
     <label>Not (nerede duruyor vs.)</label><input name="note" value="${esc(e.note)}">
     <button class="btn block">Kaydet</button>
@@ -446,7 +463,8 @@ function noteForm(x) {
     if (x) Object.assign(x, rec); else data.notes.push(rec); closeDlg(); commit(); };
 }
 document.addEventListener('click', e => {
-  if (e.target.closest('#goldAdd')) goldForm();
+  if (e.target.closest('#goldAdd')) goldForm(null, 'metal');
+  if (e.target.closest('#fxAdd')) goldForm(null, 'fx');
   if (e.target.closest('#noteAdd')) noteForm();
   if (e.target.closest('#pxRefresh')) { toast('Fiyatlar güncelleniyor…'); fetchPrices(true); }
   const g = e.target.closest('[data-gold]'); if (g) goldForm(data.gold.find(x => x.id === g.dataset.gold));
@@ -464,7 +482,7 @@ VIEWS.taksit = () => {
   const max = Math.max(1, ...next.map(n => n[1]));
   const row = ([i, f]) => `
     <div class="item" data-inst="${i.id}"><div class="ic">▦</div>
-      <div class="t"><b>${esc(i.name)}</b><small>${f.paidCount}/${i.count} ödendi · son: ${fmtMonth(f.end)}${i.day ? ' · her ayın ' + i.day + '’i' : ''}</small>
+      <div class="t"><b>${esc(i.name)}${i.card ? ' <span class="pill">💳 kredi kartı</span>' : ''}</b><small>${f.paidCount}/${i.count} ödendi · son: ${fmtMonth(f.end)}${i.day && !i.card ? ' · her ayın ' + i.day + '’i' : ''}</small>
         <div class="bar" style="color:var(--acc)"><i style="width:${(f.paidCount / i.count) * 100}%"></i></div></div>
       <div style="text-align:right"><div class="amt">${tl(i.monthly)}</div>
         ${f.finished ? '<span class="pill good">bitti</span>' : f.dueThisMonth ? `<button class="btn ghost" style="padding:4px 10px;margin-top:4px" data-pay="${i.id}">Ödendi</button>` : f.active ? '<span class="pill good">bu ay ödendi</span>' : '<span class="pill">başlamadı</span>'}</div></div>`;
@@ -485,14 +503,17 @@ function instForm(x) {
     <div class="two"><div><label>Aylık tutar (₺)</label><input name="monthly" inputmode="decimal" required value="${e.monthly}"></div>
       <div><label>Taksit sayısı</label><input name="count" type="number" min="1" required value="${e.count}"></div></div>
     <div class="two"><div><label>İlk taksit ayı</label><input type="month" name="start" required value="${e.start}"></div>
-      <div><label>Ödeme günü (ops.)</label><input name="day" type="number" min="1" max="31" value="${e.day || ''}"></div></div>
+      <div id="dayWrap" style="${e.card ? 'display:none' : ''}"><label>Ödeme günü (ops.)</label><input name="day" type="number" min="1" max="31" value="${e.day || ''}"></div></div>
+    <label><input type="checkbox" class="chk" name="card" ${e.card ? 'checked' : ''}>Kredi kartından ödenecek <span class="muted">(takvime eklenmez)</span></label>
     ${!x ? '<label><input type="checkbox" class="chk" name="autopaid" checked>Geçmiş aylar ödenmiş sayılsın</label>' : `<p class="muted">${e.paid.length} taksit ödendi olarak işaretli. <a href="#" id="iUnpay">Son ödemeyi geri al</a></p>`}
     <button class="btn block">Kaydet</button>
     <div class="btns">${x ? '<button type="button" class="btn danger" id="iDel">Sil</button>' : ''}<button type="button" class="btn ghost" data-close>Vazgeç</button></div></form>`);
   if ($('#iDel')) $('#iDel').onclick = () => { if (confirm('Taksit silinsin mi?')) { data.installments = data.installments.filter(o => o.id !== x.id); closeDlg(); commit(); } };
+  $('#iForm').card.onchange = ev => { $('#dayWrap').style.display = ev.target.checked ? 'none' : ''; };
   if ($('#iUnpay')) $('#iUnpay').onclick = ev => { ev.preventDefault(); x.paid.sort().pop(); closeDlg(); commit(); };
   $('#iForm').onsubmit = ev => { ev.preventDefault(); const f = new FormData(ev.target);
-    const rec = { id: e.id || uid(), name: f.get('name').trim(), monthly: num(f.get('monthly')), count: parseInt(f.get('count')), start: f.get('start'), day: parseInt(f.get('day')) || null, paid: e.paid };
+    const card = !!f.get('card');
+    const rec = { id: e.id || uid(), name: f.get('name').trim(), monthly: num(f.get('monthly')), count: parseInt(f.get('count')), start: f.get('start'), day: card ? null : (parseInt(f.get('day')) || null), card, paid: e.paid };
     if (!x && f.get('autopaid')) { rec.paid = []; for (let k = 0; k < rec.count; k++) { const m = addMonths(rec.start, k); if (m < thisMonth()) rec.paid.push(m); } }
     if (x) Object.assign(x, rec); else data.installments.push(rec); closeDlg(); commit(); };
 }
