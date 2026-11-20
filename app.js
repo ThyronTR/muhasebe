@@ -280,7 +280,7 @@ const FAB = { ana: 'Hızlı Ekle', harcama: 'Harcama Ekle', gelirgider: 'Gelir /
 function render(keepScroll) {
   $('#title').textContent = TITLES[state.tab];
   $$('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === state.tab));
-  document.body.dataset.tab = state.tab; // menü rengi: başlık, sekme, ekle düğmesi
+  document.body.dataset.page = state.tab; // menü rengi (data-tab DEĞİL: o, tıklanınca sekme değiştiren düğmelerin işareti)
   if (!session) return;
   const y = window.scrollY;
   $('#view').innerHTML = VIEWS[state.tab]();

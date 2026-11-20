@@ -10,14 +10,14 @@
   --gold:#b7860b;--usd:#15803d;--eur:#8b5a2b;--gbp:#1d4ed8;--chf:#dc2626;--fx:#0f766e;
   --sec:var(--c-ana);--secb:var(--b-ana);
 }
-body[data-tab="ana"]{--sec:var(--c-ana);--secb:var(--b-ana)}
-body[data-tab="harcama"]{--sec:var(--c-harcama);--secb:var(--b-harcama)}
-body[data-tab="gelirgider"]{--sec:var(--c-gelirgider);--secb:var(--b-gelirgider)}
-body[data-tab="yatirim"]{--sec:var(--c-yatirim);--secb:var(--b-yatirim)}
-body[data-tab="taksit"]{--sec:var(--c-taksit);--secb:var(--b-taksit)}
-body[data-tab="varlik"]{--sec:var(--c-varlik);--secb:var(--b-varlik)}
-body[data-tab="ayar"]{--sec:var(--c-ayar);--secb:var(--b-ayar)}
-body[data-tab="yonetim"]{--sec:var(--c-yonetim);--secb:var(--b-yonetim)}
+body[data-page="ana"]{--sec:var(--c-ana);--secb:var(--b-ana)}
+body[data-page="harcama"]{--sec:var(--c-harcama);--secb:var(--b-harcama)}
+body[data-page="gelirgider"]{--sec:var(--c-gelirgider);--secb:var(--b-gelirgider)}
+body[data-page="yatirim"]{--sec:var(--c-yatirim);--secb:var(--b-yatirim)}
+body[data-page="taksit"]{--sec:var(--c-taksit);--secb:var(--b-taksit)}
+body[data-page="varlik"]{--sec:var(--c-varlik);--secb:var(--b-varlik)}
+body[data-page="ayar"]{--sec:var(--c-ayar);--secb:var(--b-ayar)}
+body[data-page="yonetim"]{--sec:var(--c-yonetim);--secb:var(--b-yonetim)}
 
 *{box-sizing:border-box}
 html,body{margin:0}
