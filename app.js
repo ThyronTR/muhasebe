@@ -251,7 +251,7 @@ VIEWS.harcama = () => {
   const alacak = data.expenses.filter(x => x.source === 'cep' && !x.reimbursed);
   let lastDay = '';
   return `
-  <div class="row"><input type="month" id="exMonth" value="${state.month}" style="max-width:190px"><div class="btns" style="margin:0"><button class="btn" id="exXlsx">Masraf formu (Excel)</button><button class="btn ghost" id="exCsv">CSV</button></div></div>
+  <div class="row"><input type="month" id="exMonth" value="${state.month}" style="max-width:190px"><div class="btns" style="margin:0"><button class="btn" id="exXlsx">Masraf formu (Excel)</button><label class="btn ghost" style="margin:0">İçe aktar<input type="file" id="exImport" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden></label><button class="btn ghost" id="exCsv">CSV</button></div></div>
   <div class="tiles" style="margin-top:10px">
     <div class="tile"><div class="h">Cebimden</div><div class="v gider">${tl(sum('cep'))}</div></div>
     <div class="tile"><div class="h">Şirket kartı</div><div class="v transfer">${tl(sum('kart'))}</div></div>
@@ -309,7 +309,56 @@ document.addEventListener('click', e => {
 document.addEventListener('change', e => { if (e.target.id === 'exMonth' && e.target.value) { state.month = e.target.value; render(); } });
 
 /* Şirket masraf formu (xlsx) */
-const loadScript = src => new Promise((ok, fail) => { if (document.querySelector(`script[src="${src}"]`)) return ok(); const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => fail(new Error('Yüklenemedi: ' + src)); document.head.appendChild(s); });
+// integrity: dosya değiştirilmişse tarayıcı çalıştırmaz (SRI)
+const loadScript = (src, integrity) => new Promise((ok, fail) => { if (document.querySelector(`script[src="${src}"]`)) return ok(); const s = document.createElement('script'); s.src = src; if (integrity) { s.integrity = integrity; s.crossOrigin = 'anonymous'; s.referrerPolicy = 'no-referrer'; } s.onload = ok; s.onerror = () => fail(new Error('Yüklenemedi: ' + src)); document.head.appendChild(s); });
+const JSZIP_URL = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+const JSZIP_SRI = 'sha512-XMVd28F1oH/O71fzwBnV7HucLxVwtxf26XV8P4wPk26EDxuGZ91N8bsOttmnomcCD3CS5ZMRL50H0GgOHvegtg==';
+const loadXlsxLibs = async () => { await loadScript(JSZIP_URL, JSZIP_SRI); await loadScript('masraf.js?v=2'); };
+
+/* Doldurulmuş masraf formunu içe aktar */
+async function importMasraf(file) {
+  let res;
+  try { await loadXlsxLibs(); res = await Masraf.parse(JSZip, await file.arrayBuffer()); }
+  catch (e) { return toast('Dosya okunamadı: ' + e.message); }
+  if (!res.rows.length) return toast('Dosyada aktarılacak harcama bulunamadı');
+  const key = x => [x.date, x.source, Math.round(x.amount * 100), norm2(x.note || ''), norm2(x.category || '')].join('|');
+  const norm2 = s => String(s).toLocaleLowerCase('tr-TR').trim();
+  const have = new Set(data.expenses.map(key));
+  const cats = data.categories.map(norm2);
+  const items = res.rows.map((r, i) => {
+    // Masraf Adı → kategori, Harcama Nedeni → açıklama. Masraf Adı boşsa ve neden bir kategori adıysa onu kategori say.
+    let category = r.item, note = r.reason;
+    if (!category && cats.includes(norm2(note))) { category = note; note = ''; }
+    if (!category) category = 'Diğer';
+    const ci = cats.indexOf(norm2(category)); if (ci >= 0) category = data.categories[ci];
+    const rec = { id: uid(), source: r.source, amount: r.amount, date: r.date, category, note, reimbursed: false, receipt: null };
+    return { i, rec, dup: have.has(key(rec)), newCat: !data.categories.includes(category) };
+  });
+  const newCats = [...new Set(items.filter(x => x.newCat).map(x => x.rec.category))];
+  const sum = s => items.filter(x => x.rec.source === s).reduce((t, x) => t + x.rec.amount, 0);
+  openDlg(`<form id="impForm"><h3 style="margin:0">İçe aktar · ${esc(file.name)}</h3>
+    <p class="muted">${items.length} harcama bulundu · Şirket kartı ${tl(sum('kart'))} · Cebimden ${tl(sum('cep'))}${res.skipped.length ? ` · ${res.skipped.length} satır atlandı (${res.skipped.map(s => s.row + '. satır: ' + s.why).join(', ')})` : ''}</p>
+    ${items.some(x => x.dup) ? '<p class="muted">Uygulamada zaten olanlar <span class="pill warn">zaten var</span> olarak işaretli ve seçili değil.</p>' : ''}
+    ${newCats.length ? `<p class="muted">Yeni kategoriler eklenecek: <b>${newCats.map(esc).join(', ')}</b></p>` : ''}
+    <div class="list" style="max-height:45vh;overflow:auto">${items.map(x => `
+      <label class="item" style="margin:0;color:var(--fg)"><input type="checkbox" class="chk" name="sel" value="${x.i}" ${x.dup ? '' : 'checked'}>
+        <div class="t"><b>${esc(x.rec.note || x.rec.category)}${x.dup ? ' <span class="pill warn">zaten var</span>' : ''}</b><small>${fmtDate(x.rec.date)} · ${esc(x.rec.category)} · ${SRC[x.rec.source]}</small></div>
+        <div class="amt">${tl(x.rec.amount)}</div></label>`).join('')}</div>
+    <label><input type="checkbox" class="chk" name="reimb">Cebimden olanları “şirketten geri alındı” işaretle</label>
+    <button class="btn block">Seçilenleri aktar</button><div class="btns"><button type="button" class="btn ghost" data-close>Vazgeç</button></div></form>`);
+  $('#impForm').onsubmit = ev => {
+    ev.preventDefault(); const f = new FormData(ev.target);
+    const sel = new Set(f.getAll('sel').map(Number)), reimb = !!f.get('reimb');
+    const chosen = items.filter(x => sel.has(x.i));
+    if (!chosen.length) return toast('Hiç harcama seçilmedi');
+    for (const c of newCats) if (chosen.some(x => x.rec.category === c) && !data.categories.includes(c)) data.categories.push(c);
+    for (const x of chosen) data.expenses.push({ ...x.rec, reimbursed: reimb && x.rec.source === 'cep' });
+    const months = [...new Set(chosen.map(x => x.rec.date.slice(0, 7)))].sort();
+    if (months.length === 1) state.month = months[0];
+    closeDlg(); commit(); toast(`${chosen.length} harcama aktarıldı`);
+  };
+}
+document.addEventListener('change', e => { if (e.target.id === 'exImport' && e.target.files[0]) { importMasraf(e.target.files[0]); e.target.value = ''; } });
 function masrafForm() {
   const p = data.profile || {};
   const list = data.expenses.filter(x => x.date.startsWith(state.month));
@@ -329,9 +378,8 @@ function masrafForm() {
     if (name !== p.fullName) { data.profile = { ...p, fullName: name }; commit(); }
     const btn = ev.target.querySelector('.btn.block'); btn.disabled = true; btn.textContent = 'Hazırlanıyor…';
     try {
-      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
-      await loadScript('masraf.js?v=1');
-      const tpl = await (await fetch('sablon/masraf-formu.xlsx?v=1')).arrayBuffer();
+      await loadXlsxLibs();
+      const tpl = await (await fetch('sablon/masraf-formu.xlsx?v=2')).arrayBuffer();
       const z = await Masraf.fill(JSZip, tpl, { name, rows: Masraf.rowsFromExpenses(rows) });
       const blob = await z.generateAsync({ type: 'blob', compression: 'DEFLATE', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const ay = new Date(state.month + '-01T00:00').toLocaleDateString('tr-TR', { month: 'long' });

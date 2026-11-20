@@ -66,6 +66,77 @@
     }));
   }
 
-  const api = { fill, rowsFromExpenses };
+  /* ---------- İçe aktarma: doldurulmuş masraf formunu oku ---------- */
+  const norm = s => String(s || '').toLocaleLowerCase('tr-TR').replace(/\s+/g, ' ').replace(/[.:]/g, '').trim();
+  const HEAD = { name: ['masrafı yapan'], date: ['harcama tarihi', 'tarih'], reason: ['harcama nedeni', 'açıklama'], item: ['masraf adı', 'kategori'],
+    kart: ['kkartı masraf', 'k kartı masraf', 'kredi kartı masraf', 'şirket kartı'], nakit: ['nakit masraf', 'nakit'] };
+  const colNum = ref => ref.replace(/\d+/g, '').split('').reduce((n, c) => n * 26 + c.charCodeAt(0) - 64, 0);
+  function toIso(v) {
+    if (typeof v === 'number' && v > 20000 && v < 80000) { const d = new Date(Date.UTC(1899, 11, 30) + Math.round(v) * 864e5); return d.toISOString().slice(0, 10); }
+    const s = String(v || '').trim(); let m;
+    if ((m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+    if ((m = s.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})$/))) { const y = m[3].length === 2 ? '20' + m[3] : m[3]; return `${y}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`; }
+    if (/^\d+(\.\d+)?$/.test(s)) return toIso(+s);
+    return null;
+  }
+  function toNum(v) {
+    if (typeof v === 'number') return v;
+    let s = String(v || '').replace(/[₺\sTLtl]/g, ''); if (!s) return 0;
+    if (/,\d{1,2}$/.test(s)) s = s.replace(/\./g, '').replace(',', '.'); else s = s.replace(/,/g, '');
+    const n = parseFloat(s); return isNaN(n) ? 0 : Math.round(n * 100) / 100;
+  }
+  async function parse(JSZip, buf) {
+    const z = await JSZip.loadAsync(buf);
+    const wb = await z.file('xl/workbook.xml').async('string');
+    const rid = (wb.match(/<sheet [^>]*r:id="([^"]+)"/) || [])[1];
+    const rels = await z.file('xl/_rels/workbook.xml.rels').async('string');
+    let target = (rels.match(new RegExp(`<Relationship [^>]*Id="${rid}"[^>]*Target="([^"]+)"`)) || rels.match(new RegExp(`<Relationship [^>]*Target="([^"]+)"[^>]*Id="${rid}"`)) || [])[1] || 'worksheets/sheet1.xml';
+    target = target.replace(/^\/?xl\//, '').replace(/^\//, '');
+    const sh = await z.file('xl/' + target).async('string');
+    const ssFile = z.file('xl/sharedStrings.xml');
+    const dec = s => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
+    const strings = ssFile ? ((await ssFile.async('string')).match(/<si>[\s\S]*?<\/si>/g) || []).map(si => dec((si.match(/<t[^>]*>[\s\S]*?<\/t>/g) || []).map(t => t.replace(/<[^>]+>/g, '')).join(''))) : [];
+    const grid = [];
+    for (const rm of sh.matchAll(/<row [^>]*r="(\d+)"[^>]*>([\s\S]*?)<\/row>/g)) {
+      const row = {};
+      for (const cm of rm[2].matchAll(/<c r="([A-Z]+)\d+"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+        const attrs = cm[2], inner = cm[3] || '', t = (attrs.match(/t="(\w+)"/) || [])[1];
+        const v = (inner.match(/<v>([\s\S]*?)<\/v>/) || [])[1];
+        let val = null;
+        if (t === 's') val = strings[+v] ?? '';
+        else if (t === 'inlineStr') val = dec((inner.match(/<t[^>]*>[\s\S]*?<\/t>/g) || []).map(x => x.replace(/<[^>]+>/g, '')).join(''));
+        else if (t === 'str') val = dec(v || '');
+        else if (v != null) val = +v;
+        if (val !== null && val !== '') row[colNum(cm[1])] = { val, formula: /<f[ >]/.test(inner) };
+      }
+      grid.push({ r: +rm[1], row });
+    }
+    // Başlık satırını bul ve sütunları adlarına göre eşle (sütun yerleri değişse de çalışır)
+    let hdrIdx = -1, cols = {};
+    for (let i = 0; i < grid.length && hdrIdx < 0; i++) {
+      const found = {};
+      for (const [c, cell] of Object.entries(grid[i].row)) { const n = norm(cell.val); for (const [k, names] of Object.entries(HEAD)) if (!found[k] && names.some(h => n === h || n.startsWith(h))) found[k] = +c; }
+      if (found.date && (found.kart || found.nakit)) { hdrIdx = i; cols = found; }
+    }
+    if (hdrIdx < 0) throw new Error('Masraf formu başlıkları bulunamadı (Harcama Tarihi, K.Kartı Masraf, Nakit Masraf)');
+    const rows = [], skipped = [];
+    for (const { r, row } of grid.slice(hdrIdx + 1)) {
+      const g = k => cols[k] ? row[cols[k]] : undefined;
+      const texts = Object.values(row).map(c => norm(c.val));
+      if (texts.some(t => t.includes('toplam') || t.startsWith('onay'))) break; // toplam / onay bölümüne gelindi
+      if (Object.values(row).some(c => c.formula)) continue;
+      const kart = toNum(g('kart')?.val), nakit = toNum(g('nakit')?.val);
+      const hasAny = Object.keys(row).length > 0;
+      if (!hasAny) continue;
+      const date = toIso(g('date')?.val);
+      if (!date || (!kart && !nakit)) { skipped.push({ row: r, why: !date ? 'tarih okunamadı' : 'tutar yok' }); continue; }
+      const base = { row: r, date, name: String(g('name')?.val ?? '').trim(), reason: String(g('reason')?.val ?? '').trim(), item: String(g('item')?.val ?? '').trim() };
+      if (kart) rows.push({ ...base, source: 'kart', amount: kart });
+      if (nakit) rows.push({ ...base, source: 'cep', amount: nakit });
+    }
+    return { rows, skipped };
+  }
+
+  const api = { fill, rowsFromExpenses, parse };
   if (typeof module !== 'undefined') module.exports = api; else root.Masraf = api;
 })(this);
