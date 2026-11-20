@@ -69,6 +69,10 @@ input[type=file]{padding:8px}
 .pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:99px;background:var(--chip);color:var(--muted);margin-left:6px;font-weight:600}
 .pill.warn{background:#fef3c7;color:#92400e}.pill.bad{background:#fee2e2;color:#991b1b}.pill.good{background:#dcfce7;color:#166534}
 .note{white-space:pre-wrap}
+body.authmode .tabs,body.authmode .iconbtn,body.authmode .sync{display:none}
+.auth{max-width:380px;margin:24px auto}
+.authlogo{text-align:center;margin-bottom:6px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
 .chk{width:auto;margin-right:6px}
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#0f172a;color:#fff;padding:10px 16px;border-radius:10px;
   opacity:0;pointer-events:none;transition:.2s;max-width:90vw;z-index:9}

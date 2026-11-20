@@ -30,52 +30,51 @@ function defaultData() {
     expenses: [], gold: [], notes: [], installments: [], assets: []
   };
 }
-const cfg = Object.assign({ owner: 'ThyronTR', repo: 'muhasebe-veri', token: '' }, load('mh_cfg') || {});
-let data = Object.assign(defaultData(), load('mh_data') || {});
-let sha = load('mh_sha');
-let dirty = !!load('mh_dirty');
+/* ========== Sunucu (Cloudflare Worker) ========== */
+const API = ['localhost', '127.0.0.1'].includes(location.hostname) ? 'http://localhost:8787' : 'https://muhasebe-api.muhasebe-api.workers.dev';
+let session = load('mh_session'); // {token, user:{id, username, isAdmin}}
+const k = name => `mh_${name}_${session?.user.id}`;
+let data = defaultData(), version = 0, dirty = false;
 let prices = load('mh_prices'); // {at, items:{KEY:{buy,sell,change}}}
 
-/* ========== GitHub senkron ========== */
-const toB64 = str => { const b = new TextEncoder().encode(str); let s = ''; for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(s); };
-const fromB64 = b => new TextDecoder().decode(Uint8Array.from(atob(b.replace(/\s/g, '')), c => c.charCodeAt(0)));
-async function gh(path, opts = {}, raw = false) {
-  const r = await fetch(`https://api.github.com/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/contents/${path}`, {
-    ...opts, cache: 'no-store',
-    headers: { Authorization: 'Bearer ' + cfg.token, Accept: raw ? 'application/vnd.github.raw+json' : 'application/vnd.github+json', ...(opts.body ? { 'Content-Type': 'application/json' } : {}) }
-  });
-  if (!r.ok) { const e = new Error('GitHub ' + r.status); e.status = r.status; throw e; }
-  return raw ? r.text() : r.json();
+async function api(path, opts = {}) {
+  const headers = { ...(opts.headers || {}) };
+  if (session) headers.Authorization = 'Bearer ' + session.token;
+  if (opts.body && typeof opts.body === 'string') headers['Content-Type'] = 'application/json';
+  let r;
+  try { r = await fetch(API + path, { ...opts, headers, cache: 'no-store' }); }
+  catch { const e = new Error('Sunucuya ulaşılamadı'); e.offline = true; throw e; }
+  if (r.status === 401 && session && !path.startsWith('/api/login')) { signOut(true); }
+  if (!r.ok) { let msg = 'Hata ' + r.status, extra = {}; try { extra = await r.json(); msg = extra.error || msg; } catch {} const e = new Error(msg); e.status = r.status; e.body = extra; throw e; }
+  return (r.headers.get('Content-Type') || '').includes('json') ? r.json() : r;
 }
 function setSync(state, title) { const s = $('#sync'); s.className = 'sync ' + state; s.title = title || ''; }
-function saveLocal() { store('mh_data', data); store('mh_sha', sha); store('mh_dirty', dirty); }
+function loadLocal() {
+  data = Object.assign(defaultData(), load(k('data')) || {});
+  version = load(k('ver')) || 0; dirty = !!load(k('dirty'));
+}
+function saveLocal() { store(k('data'), data); store(k('ver'), version); store(k('dirty'), dirty); }
 async function pull() {
-  if (!cfg.token) return setSync('', 'GitHub bağlı değil — veriler yalnızca bu cihazda');
   setSync('busy', 'Yükleniyor…');
   try {
-    const meta = await gh('data.json');
-    const text = meta.content ? fromB64(meta.content) : await gh('data.json', {}, true);
-    data = Object.assign(defaultData(), JSON.parse(text)); sha = meta.sha; dirty = false; saveLocal();
+    const r = await api('/api/data');
+    if (r.data) { data = Object.assign(defaultData(), r.data); version = r.version; dirty = false; saveLocal(); }
+    else if (version === 0) { dirty = true; saveLocal(); return push(); }
     setSync('ok', 'Güncel'); render();
-  } catch (e) {
-    if (e.status === 404) { sha = null; dirty = true; saveLocal(); return push(); }
-    setSync('err', e.status === 401 ? 'Token geçersiz' : 'Bağlantı yok — yerel veri gösteriliyor');
-  }
+  } catch (e) { if (session) setSync('err', e.offline ? 'Çevrimdışı — bu cihazdaki veri gösteriliyor' : e.message); }
 }
 let pushing = null;
 async function push() {
-  if (!cfg.token || !dirty) return;
+  if (!session || !dirty) return;
   if (pushing) return pushing.then(push);
   setSync('busy', 'Kaydediliyor…');
   pushing = (async () => {
     try {
-      const body = { message: 'Veri güncellendi ' + new Date().toISOString(), content: toB64(JSON.stringify(data, null, 1)) };
-      if (sha) body.sha = sha;
-      const res = await gh('data.json', { method: 'PUT', body: JSON.stringify(body) });
-      sha = res.content.sha; dirty = false; saveLocal(); setSync('ok', 'Kaydedildi');
+      const r = await api('/api/data', { method: 'PUT', body: JSON.stringify({ data, version }) });
+      version = r.version; dirty = false; saveLocal(); setSync('ok', 'Kaydedildi');
     } catch (e) {
-      if (e.status === 409 || e.status === 422) { setSync('err', 'Başka cihazda değişiklik var'); toast('Başka bir cihazda değişiklik var. Ayarlar → Sunucudan yükle.'); }
-      else setSync('err', 'Çevrimdışı — bu cihazda saklandı, sonra gönderilecek');
+      if (e.status === 409) { setSync('err', 'Başka cihazda değişiklik var'); toast('Başka bir cihazda değişiklik yapılmış. Ayarlar → Sunucudan yükle.'); }
+      else setSync('err', e.offline ? 'Çevrimdışı — bu cihazda saklandı, bağlanınca gönderilecek' : e.message);
     } finally { pushing = null; }
   })();
   return pushing;
@@ -83,6 +82,51 @@ async function push() {
 let pushT;
 function commit() { dirty = true; saveLocal(); clearTimeout(pushT); pushT = setTimeout(push, 700); render(); }
 window.addEventListener('online', push);
+
+/* ========== Giriş / kayıt ========== */
+function startSession(s) { session = s; store('mh_session', s); loadLocal(); boot(); }
+function signOut(expired) {
+  if (expired) toast('Oturum süresi doldu, tekrar giriş yap');
+  else api('/api/logout', { method: 'POST' }).catch(() => {});
+  session = null; localStorage.removeItem('mh_session'); showAuth();
+}
+function showAuth(mode) {
+  const invite = new URLSearchParams(location.search).get('davet');
+  mode = mode || (invite ? 'kayit' : 'giris');
+  document.body.classList.add('authmode');
+  $('#title').textContent = mode === 'kayit' ? 'Hesap oluştur' : 'Giriş';
+  $('#view').innerHTML = `
+  <div class="auth card">
+    <div class="authlogo"><img src="icon.svg" alt="" width="56" height="56"></div>
+    ${mode === 'kayit' ? `<p class="muted" id="invInfo">Davet kontrol ediliyor…</p>` : '<p class="muted">Kullanıcı adın ve şifrenle giriş yap.</p>'}
+    <form id="authForm" autocomplete="on">
+      <label>Kullanıcı adı</label><input name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required minlength="3" maxlength="32" pattern="[a-zA-Z0-9._\\-]+">
+      <label>Şifre</label><input name="password" type="password" autocomplete="${mode === 'kayit' ? 'new-password' : 'current-password'}" required ${mode === 'kayit' ? 'minlength="8"' : ''}>
+      ${mode === 'kayit' ? '<label>Şifre (tekrar)</label><input name="password2" type="password" autocomplete="new-password" required minlength="8"><p class="muted">Kullanıcı adı: 3-32 karakter, harf/rakam/. _ - · Şifre: en az 8 karakter</p>' : ''}
+      <button class="btn block" id="authBtn">${mode === 'kayit' ? 'Hesabı oluştur' : 'Giriş yap'}</button>
+    </form>
+    ${mode === 'kayit' ? '<p class="muted" style="text-align:center">Zaten hesabın var mı? <a href="#" id="toLogin">Giriş yap</a></p>' : '<p class="muted" style="text-align:center">Hesaplar yalnızca davetle açılır.</p>'}
+  </div>`;
+  if ($('#toLogin')) $('#toLogin').onclick = e => { e.preventDefault(); history.replaceState(null, '', location.pathname); showAuth('giris'); };
+  if (mode === 'kayit') api('/api/invite?code=' + encodeURIComponent(invite)).then(r => {
+    $('#invInfo').innerHTML = r.valid ? 'Davet geçerli. Kendine bir kullanıcı adı ve şifre belirle.' : '<b class="gider">Bu davet linki geçersiz, kullanılmış ya da süresi dolmuş.</b> Yeni bir davet iste.';
+    if (!r.valid) $('#authBtn').disabled = true;
+  }).catch(() => { $('#invInfo').textContent = 'Sunucuya ulaşılamadı.'; });
+  $('#authForm').onsubmit = async ev => {
+    ev.preventDefault(); const f = new FormData(ev.target); const btn = $('#authBtn');
+    const username = f.get('username').trim(), password = f.get('password');
+    if (mode === 'kayit' && password !== f.get('password2')) return toast('Şifreler aynı değil');
+    btn.disabled = true;
+    try {
+      const r = mode === 'kayit'
+        ? await api('/api/register', { method: 'POST', body: JSON.stringify({ invite, username, password }) })
+        : await api('/api/login', { method: 'POST', body: JSON.stringify({ username, password }) });
+      history.replaceState(null, '', location.pathname);
+      startSession({ token: r.token, user: r.user });
+      toast(mode === 'kayit' ? 'Hoş geldin, ' + r.user.username : 'Giriş yapıldı');
+    } catch (e) { toast(e.message); btn.disabled = false; }
+  };
+}
 
 /* Fiş fotoğrafı */
 async function compressImage(file) {
@@ -92,17 +136,19 @@ async function compressImage(file) {
   c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
   return c.toDataURL('image/jpeg', 0.72).split(',')[1];
 }
-async function uploadReceipt(file, id) {
-  if (!cfg.token) throw new Error('GitHub bağlı değil');
-  const content = await compressImage(file);
-  const path = `fisler/${id}.jpg`;
-  await gh(path, { method: 'PUT', body: JSON.stringify({ message: 'Fiş eklendi', content }) });
-  return path;
+async function uploadReceipt(file) {
+  const b64 = await compressImage(file);
+  const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  const r = await api('/api/receipts', { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: bytes });
+  return r.id;
 }
-async function showReceipt(path) {
+async function showReceipt(id) {
   openDlg('<p class="muted">Fiş yükleniyor…</p>');
-  try { const m = await gh(path); $('#dlgBody').innerHTML = `<img src="data:image/jpeg;base64,${m.content.replace(/\s/g, '')}" alt="Fiş"><div class="btns"><button class="btn ghost" data-close>Kapat</button></div>`; }
-  catch { $('#dlgBody').innerHTML = '<p>Fiş açılamadı (bağlantıyı kontrol et).</p><div class="btns"><button class="btn ghost" data-close>Kapat</button></div>'; }
+  try {
+    const r = await api('/api/receipt?id=' + encodeURIComponent(id));
+    const url = URL.createObjectURL(await r.blob());
+    $('#dlgBody').innerHTML = `<img src="${url}" alt="Fiş"><div class="btns"><button class="btn ghost" data-close>Kapat</button></div>`;
+  } catch { $('#dlgBody').innerHTML = '<p>Fiş açılamadı (bağlantıyı kontrol et).</p><div class="btns"><button class="btn ghost" data-close>Kapat</button></div>'; }
 }
 
 /* Altın fiyatları */
@@ -162,7 +208,9 @@ const TITLES = { ana: 'Ana Sayfa', harcama: 'Harcamalar', yatirim: 'Yatırım', 
 function render() {
   $('#title').textContent = TITLES[state.tab];
   $$('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === state.tab));
+  if (!session) return;
   $('#view').innerHTML = VIEWS[state.tab]();
+  if (state.tab === 'ayar') loadInvites();
   window.scrollTo(0, 0);
 }
 function go(tab) { state.tab = tab; render(); if (tab === 'yatirim' || tab === 'ana') fetchPrices(); }
@@ -192,7 +240,7 @@ VIEWS.ana = () => {
   ${up.length ? `<div class="list">${up.map(({ a, e, d }) => `
     <div class="item" data-tab="varlik"><div class="ic">⛨</div><div class="t"><b>${esc(a.name)} · ${esc(e.kind)}</b><small>${fmtDate(e.date)}${e.cost ? ' · ' + tl(e.cost) : ''}</small></div>${dayPill(d)}</div>`).join('')}</div>`
     : '<div class="card empty">Önümüzdeki 60 günde yenileme yok.</div>'}
-  ${!cfg.token ? '<h2>Senkron</h2><div class="card">Veriler şu an yalnızca bu cihazda. Telefon ve bilgisayarda aynı veriyi görmek için <a href="#" data-tab="ayar">Ayarlar</a>’dan GitHub’a bağlan.</div>' : ''}`;
+`;
 };
 
 /* --- Harcamalar --- */
@@ -241,7 +289,7 @@ function expenseForm(x) {
     const rec = { id: e.id || uid(), source: src, amount: num(f.get('amount')), date: f.get('date'), category: f.get('category'), note: f.get('note').trim(), reimbursed: src === 'cep' && !!f.get('reimbursed'), receipt: e.receipt || null };
     if (!rec.amount) return toast('Tutar gir');
     const file = f.get('receipt');
-    if (file && file.size) { toast('Fiş yükleniyor…'); try { rec.receipt = await uploadReceipt(file, rec.id); } catch { toast('Fiş yüklenemedi (GitHub bağlantısı gerekli). Harcama fişsiz kaydedildi.'); } }
+    if (file && file.size) { toast('Fiş yükleniyor…'); try { rec.receipt = await uploadReceipt(file); } catch (err) { toast('Fiş yüklenemedi (' + err.message + '). Harcama fişsiz kaydedildi.'); } }
     if (x) Object.assign(x, rec); else data.expenses.push(rec);
     closeDlg(); commit();
   };
@@ -439,31 +487,68 @@ document.addEventListener('click', e => {
 
 /* --- Ayarlar --- */
 VIEWS.ayar = () => `
-  <h2>GitHub senkronu</h2>
+  <h2>Hesap</h2>
   <div class="card">
-    <p class="muted" style="margin-top:0">Veriler gizli <b>${esc(cfg.owner)}/${esc(cfg.repo)}</b> deposunda saklanır. Her cihazda bir kez token gir.
-      Token: GitHub → Settings → Developer settings → <b>Fine-grained tokens</b> → yalnızca <b>${esc(cfg.repo)}</b> deposu, <b>Contents: Read and write</b>.</p>
-    <form id="cfgForm">
-      <div class="two"><div><label>Kullanıcı</label><input name="owner" value="${esc(cfg.owner)}"></div><div><label>Veri deposu</label><input name="repo" value="${esc(cfg.repo)}"></div></div>
-      <label>Token</label><input name="token" type="password" autocomplete="off" placeholder="${cfg.token ? '•••••••• (kayıtlı)' : 'github_pat_…'}">
-      <div class="btns"><button class="btn">Kaydet ve bağlan</button>${cfg.token ? '<button type="button" class="btn ghost" id="pullBtn">Sunucudan yükle</button><button type="button" class="btn ghost" id="logout">Bu cihazdan çıkış</button>' : ''}</div>
-    </form>
-    <p class="muted">Durum: ${esc($('#sync').title || '—')}</p>
+    <div class="row"><div><b>${esc(session.user.username)}</b>${session.user.isAdmin ? '<span class="pill good">yönetici</span>' : ''}<div class="muted">Senkron: ${esc($('#sync').title || '—')}</div></div>
+      <button class="btn ghost" id="logout">Çıkış yap</button></div>
+    <div class="btns"><button class="btn ghost" id="pwBtn">Şifre değiştir</button><button class="btn ghost" id="pullBtn">Sunucudan yükle</button></div>
   </div>
+  ${session.user.isAdmin ? `<h2>Davetler</h2>
+  <div class="card">
+    <p class="muted" style="margin-top:0">Hesaplar yalnızca davet linkiyle açılır. Her link tek kişilik ve süreli. Her kullanıcının verisi kendine özeldir.</p>
+    <form id="invForm" class="two"><input name="note" placeholder="Kimin için? (ops.)" maxlength="80"><select name="days">${[1, 3, 7, 14, 30].map(d => opt(String(d), d + ' gün geçerli', '7')).join('')}</select>
+      <button class="btn" style="grid-column:1/-1">Davet linki oluştur</button></form>
+    <div id="invList" class="muted" style="margin-top:12px">Yükleniyor…</div>
+  </div>` : ''}
   <h2>Harcama kategorileri</h2>
   <div class="list">${data.categories.map((c, i) => `<div class="item"><div class="t"><b>${esc(c)}</b></div><button class="btn ghost" style="padding:4px 10px" data-catdel="${i}">Sil</button></div>`).join('')}</div>
   <form id="catForm" class="row" style="margin-top:8px"><input name="c" placeholder="Yeni kategori" required><button class="btn">Ekle</button></form>
   <h2>Yedek</h2>
   <div class="btns"><button class="btn ghost" id="bkDown">Yedeği indir (JSON)</button><label class="btn ghost" style="margin:0;color:var(--fg)">Yedekten yükle<input type="file" id="bkUp" accept=".json" hidden></label></div>`;
-document.addEventListener('submit', e => {
-  if (e.target.id === 'cfgForm') { e.preventDefault(); const f = new FormData(e.target);
-    cfg.owner = f.get('owner').trim(); cfg.repo = f.get('repo').trim(); if (f.get('token').trim()) cfg.token = f.get('token').trim();
-    store('mh_cfg', cfg); toast('Bağlanılıyor…'); (dirty && sha ? push() : pull()).then(() => render()); }
+async function loadInvites() {
+  const box = $('#invList'); if (!box) return;
+  try {
+    const { invites, appUrl } = await api('/api/invites');
+    box.innerHTML = invites.length ? `<div class="list">${invites.map(i => {
+      const st = i.used_at ? `<span class="pill good">${esc(i.used_by_name || 'kullanıldı')}</span>` : i.expires_at < Date.now() ? '<span class="pill bad">süresi doldu</span>' : '<span class="pill warn">bekliyor</span>';
+      const link = `${appUrl}/?davet=${i.code}`;
+      return `<div class="item" style="cursor:default"><div class="t"><b>${esc(i.note || 'Davet')} ${st}</b><small>${new Date(i.created_at).toLocaleDateString('tr-TR')} · son: ${new Date(i.expires_at).toLocaleDateString('tr-TR')}</small></div>
+        ${!i.used_at && i.expires_at > Date.now() ? `<button class="btn ghost" style="padding:4px 10px" data-copy="${esc(link)}">Kopyala</button><button class="btn ghost" style="padding:4px 10px" data-revoke="${i.code}">İptal</button>` : ''}</div>`;
+    }).join('')}</div>` : 'Henüz davet oluşturulmadı.';
+  } catch (e) { box.textContent = e.message; }
+}
+async function copyText(t) { try { await navigator.clipboard.writeText(t); toast('Link kopyalandı'); } catch { prompt('Linki kopyala:', t); } }
+function shareInvite(url, note) {
+  openDlg(`<h3 style="margin:0">Davet linki hazır</h3><p class="muted">${note ? esc(note) + ' için · ' : ''}Tek kullanımlık. Linki açan kişi kendi kullanıcı adı ve şifresini belirler.</p>
+    <input readonly value="${esc(url)}" onclick="this.select()">
+    <div class="btns"><button class="btn" data-copy="${esc(url)}">Kopyala</button>${navigator.share ? '<button class="btn ghost" id="shareBtn">Paylaş</button>' : ''}<button class="btn ghost" data-close>Kapat</button></div>`);
+  if ($('#shareBtn')) $('#shareBtn').onclick = () => navigator.share({ title: 'Muhasebe daveti', url }).catch(() => {});
+}
+function passwordForm() {
+  openDlg(`<form id="pwForm"><h3 style="margin:0">Şifre değiştir</h3>
+    <input type="text" name="username" value="${esc(session.user.username)}" autocomplete="username" hidden>
+    <label>Mevcut şifre</label><input type="password" name="old" autocomplete="current-password" required>
+    <label>Yeni şifre (en az 8 karakter)</label><input type="password" name="n1" autocomplete="new-password" minlength="8" required>
+    <label>Yeni şifre (tekrar)</label><input type="password" name="n2" autocomplete="new-password" minlength="8" required>
+    <p class="muted">Diğer cihazlardaki oturumlar kapanır.</p>
+    <button class="btn block">Kaydet</button><div class="btns"><button type="button" class="btn ghost" data-close>Vazgeç</button></div></form>`);
+  $('#pwForm').onsubmit = async ev => { ev.preventDefault(); const f = new FormData(ev.target);
+    if (f.get('n1') !== f.get('n2')) return toast('Yeni şifreler aynı değil');
+    try { await api('/api/password', { method: 'POST', body: JSON.stringify({ oldPassword: f.get('old'), newPassword: f.get('n1') }) }); closeDlg(); toast('Şifre değiştirildi'); }
+    catch (e) { toast(e.message); } };
+}
+document.addEventListener('submit', async e => {
+  if (e.target.id === 'invForm') { e.preventDefault(); const f = new FormData(e.target);
+    try { const r = await api('/api/invites', { method: 'POST', body: JSON.stringify({ note: f.get('note').trim(), days: +f.get('days') }) }); e.target.reset(); shareInvite(r.url, f.get('note').trim()); loadInvites(); }
+    catch (err) { toast(err.message); } }
   if (e.target.id === 'catForm') { e.preventDefault(); const c = new FormData(e.target).get('c').trim(); if (c && !data.categories.includes(c)) { data.categories.push(c); commit(); } }
 });
 document.addEventListener('click', e => {
-  if (e.target.closest('#pullBtn') && confirm('Bu cihazdaki gönderilmemiş değişiklikler kaybolabilir. Sunucudaki veri yüklensin mi?')) { dirty = false; pull(); }
-  if (e.target.closest('#logout') && confirm('Bu cihazdan token ve yerel veri silinsin mi? (GitHub’daki veri kalır)')) { localStorage.clear(); location.reload(); }
+  if (e.target.closest('#pullBtn') && confirm('Bu cihazdaki gönderilmemiş değişiklikler kaybolabilir. Sunucudaki veri yüklensin mi?')) { dirty = false; version = 0; pull(); }
+  if (e.target.closest('#logout') && confirm('Çıkış yapılsın mı?' + (dirty ? ' Gönderilmemiş değişiklikler var!' : ''))) signOut();
+  if (e.target.closest('#pwBtn')) passwordForm();
+  const cp = e.target.closest('[data-copy]'); if (cp) copyText(cp.dataset.copy);
+  const rv = e.target.closest('[data-revoke]'); if (rv && confirm('Bu davet iptal edilsin mi?')) api('/api/invites?code=' + rv.dataset.revoke, { method: 'DELETE' }).then(loadInvites).catch(err => toast(err.message));
   const cd = e.target.closest('[data-catdel]'); if (cd) { data.categories.splice(+cd.dataset.catdel, 1); commit(); }
   if (e.target.closest('#bkDown')) download(`muhasebe-yedek-${today()}.json`, JSON.stringify(data, null, 1), 'application/json');
 });
@@ -474,7 +559,10 @@ document.addEventListener('change', async e => {
 });
 
 /* ========== Başlat ========== */
-render();
-fetchPrices();
-if (cfg.token) (dirty ? push() : pull());
-else setSync('', 'GitHub bağlı değil — veriler yalnızca bu cihazda');
+function boot() {
+  document.body.classList.remove('authmode');
+  state.tab = 'ana'; render(); fetchPrices();
+  dirty ? push().then(pull) : pull();
+}
+if (session && !new URLSearchParams(location.search).get('davet')) { loadLocal(); boot(); }
+else showAuth();
