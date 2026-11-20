@@ -6,7 +6,11 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const tl = (n, cur = 'TRY') => new Intl.NumberFormat('tr-TR', { style: 'currency', currency: cur, maximumFractionDigits: 2 }).format(n || 0);
 const num = v => { const n = parseFloat(String(v).replace(/\s/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.')); return isNaN(n) ? 0 : n; };
-const today = () => new Date().toISOString().slice(0, 10);
+// Tarihler yerel saatle (toISOString UTC'ye çevirip Türkiye'de günü bir geri kaydırıyordu)
+const isoLocal = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const today = () => isoLocal(new Date());
+const addDaysIso = (iso, n) => { const d = new Date(iso + 'T00:00'); d.setDate(d.getDate() + n); return isoLocal(d); };
+const addYearsIso = (iso, n) => { const [y, m, d] = iso.split('-').map(Number); const t = new Date(y + n, m - 1, d); if (t.getMonth() !== m - 1) t.setDate(0); return isoLocal(t); };
 const thisMonth = () => today().slice(0, 7);
 const fmtDate = d => d ? new Date(d + 'T00:00').toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
 const fmtMonth = m => new Date(m + '-01T00:00').toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
@@ -16,6 +20,36 @@ const daysUntil = d => Math.round((new Date(d + 'T00:00') - new Date(today() + '
 const load = k => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } };
 const store = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 2600); }
+
+/* ========== Simgeler (çizgi simgeler, renk yazı renginden gelir) ========== */
+const ICONS = {
+  home: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+  briefcase: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2M2 13h20"/>',
+  flows: '<path d="M7 3v18M3 7l4-4 4 4M17 21V3M13 17l4 4 4-4"/>',
+  trend: '<path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/>',
+  card: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/>',
+  shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="m9 12 2 2 4-4"/>',
+  gear: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+  bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+  save: '<path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2"/><path d="M12 12v9M8 16l4-4 4 4"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  wallet: '<path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a2 2 0 0 1-2-2V5"/><circle cx="16.5" cy="13.5" r="1.5"/>',
+  coins: '<circle cx="9" cy="9" r="6"/><path d="M18.1 10.4A6 6 0 1 1 10.4 18"/><path d="M8 7h2v4"/>',
+  back: '<path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-1"/>',
+  pencil: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
+  calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  arrowUp: '<path d="M12 19V5M5 12l7-7 7 7"/>', arrowDown: '<path d="M12 5v14M19 12l-7 7-7-7"/>',
+  handshake: '<path d="m11 17 2 2a1 1 0 1 0 3-3"/><path d="m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.9-3.9a3 3 0 0 0-4.2 0l-.9.9a1 1 0 1 1-3-3l2.8-2.8a5.8 5.8 0 0 1 7.1-.9l.5.3a2 2 0 0 0 1.5.2L21 4"/><path d="m21 3 1 11h-2M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3M3 4h8"/>'
+};
+const ic = (name, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
+// Alt menü: sekme, kısa etiket, simge
+const NAV = [['ana', 'Ana Sayfa', 'home'], ['harcama', 'Şirket İçi', 'briefcase'], ['gelirgider', 'Gelir-Gider', 'flows'], ['yatirim', 'Yatırım', 'trend'], ['taksit', 'Taksitler', 'card'], ['varlik', 'Varlıklar', 'shield']];
+$('#tabs').innerHTML = NAV.map(([t, l, i]) => `<button data-tab="${t}">${ic(i)}<span>${l}</span></button>`).join('');
+$('#gearBtn').innerHTML = ic('gear');
+$('#bellBtn').innerHTML = ic('bell') + '<span class="badge" id="bellBadge" hidden></span>';
+$('#saveBtn').innerHTML = ic('save') + '<span class="lbl">Kaydet</span>';
 
 /* ========== Veri ========== */
 // Altın/gümüş ve dövizler: hepsi canlı fiyatla TL'ye çevrilir (veri alanı geriye uyum için "gold")
@@ -37,7 +71,7 @@ function defaultData() {
   return {
     version: 2,
     categories: ['Yemek', 'Ulaşım', 'Yakıt', 'Konaklama', 'Malzeme / ekipman', 'Yazılım / abonelik', 'Kargo', 'Diğer'],
-    expenses: [], gold: [], notes: [], installments: [], assets: []
+    expenses: [], gold: [], notes: [], installments: [], assets: [], flows: []
   };
 }
 /* ========== Sunucu (Cloudflare Worker) ========== */
@@ -58,7 +92,14 @@ async function api(path, opts = {}) {
   if (!r.ok) { let msg = 'Hata ' + r.status, extra = {}; try { extra = await r.json(); msg = extra.error || msg; } catch {} const e = new Error(msg); e.status = r.status; e.body = extra; throw e; }
   return (r.headers.get('Content-Type') || '').includes('json') ? r.json() : r;
 }
-function setSync(state, title) { const s = $('#sync'); s.className = 'sync ' + state; s.title = title || ''; }
+function setSync(st, title) {
+  const s = $('#sync'); s.className = 'sync ' + st; s.title = title || '';
+  const b = $('#saveBtn'); if (!b) return;
+  b.classList.toggle('busy', st === 'busy');
+  b.classList.toggle('pending', dirty && st !== 'busy');
+  b.classList.toggle('ok', !dirty && st === 'ok');
+  b.title = dirty ? 'Kaydedilmemiş değişiklik var — kaydet ve eşitle' : (title || 'Kaydet ve eşitle');
+}
 function loadLocal() {
   data = Object.assign(defaultData(), load(k('data')) || {});
   version = load(k('ver')) || 0; dirty = !!load(k('dirty'));
@@ -70,7 +111,7 @@ async function pull() {
     const r = await api('/api/data');
     if (r.data) { data = Object.assign(defaultData(), r.data); version = r.version; dirty = false; saveLocal(); }
     else if (version === 0) { dirty = true; saveLocal(); return push(); }
-    setSync('ok', 'Güncel'); render();
+    setSync('ok', 'Güncel'); softRender();
   } catch (e) { if (session) setSync('err', e.offline ? 'Çevrimdışı — bu cihazdaki veri gösteriliyor' : e.message); }
 }
 let pushing = null;
@@ -90,7 +131,24 @@ async function push() {
   return pushing;
 }
 let pushT;
-function commit() { dirty = true; saveLocal(); clearTimeout(pushT); pushT = setTimeout(push, 700); render(); }
+function commit() { dirty = true; saveLocal(); setSync('', 'Kaydedilmemiş değişiklik'); clearTimeout(pushT); pushT = setTimeout(push, 1500); render(true); }
+// Kaydet düğmesi: bekleyen değişiklikleri gönder, sunucudaki son hali al, Google Takvim'i eşitle
+async function saveAll() {
+  const b = $('#saveBtn'); if (b.disabled) return; b.disabled = true;
+  clearTimeout(pushT);
+  try {
+    if (dirty) await push();
+    if (dirty) return toast('Kaydedilemedi: ' + ($('#sync').title || 'bağlantı yok'));
+    await pull();
+    let msg = 'Kaydedildi ve eşitlendi ✓';
+    if (gConnected()) {
+      try { const r = await api('/api/google/sync', { method: 'POST' }); msg = r.error ? 'Kaydedildi · takvim: ' + r.error : `Kaydedildi · takvim güncel (${(r.created || 0) + (r.updated || 0) + (r.deleted || 0)} değişiklik) ✓`; }
+      catch (e) { msg = 'Kaydedildi · takvim eşitlenemedi'; }
+    }
+    toast(msg);
+  } finally { b.disabled = false; }
+}
+document.addEventListener('click', e => { if (e.target.closest('#saveBtn')) saveAll(); });
 window.addEventListener('online', push);
 
 /* ========== Giriş / kayıt ========== */
@@ -141,10 +199,13 @@ function showAuth(mode) {
 /* Fiş fotoğrafı */
 async function compressImage(file) {
   const bmp = await createImageBitmap(file);
-  const k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+  // Fiş okunur kalsın ama yer kaplamasın: uzun kenar en fazla 1280 px, JPEG %60 → genelde 100-250 KB
+  const k = Math.min(1, 1280 / Math.max(bmp.width, bmp.height));
   const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
-  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
-  return c.toDataURL('image/jpeg', 0.72).split(',')[1];
+  const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(bmp, 0, 0, c.width, c.height);
+  let q = 0.6, out = c.toDataURL('image/jpeg', q);
+  while (out.length > 600e3 && q > 0.3) { q -= 0.1; out = c.toDataURL('image/jpeg', q); } // çok büyükse biraz daha sıkıştır
+  return out.split(',')[1];
 }
 async function uploadReceipt(file) {
   const b64 = await compressImage(file);
@@ -175,7 +236,7 @@ async function fetchPrices(force) {
     const items = {};
     for (const k of Object.keys(GOLD_TYPES)) if (j[k] && j[k].Buying) items[k] = { buy: j[k].Buying, sell: j[k].Selling, change: j[k].Change };
     prices = { at: Date.now(), src: j.Update_Date, items }; store('mh_prices', prices);
-    if (state.tab === 'yatirim' || state.tab === 'ana') render();
+    if (state.tab === 'yatirim' || state.tab === 'ana') softRender();
   } catch { if (force) toast('Fiyatlar alınamadı'); }
 }
 setInterval(() => fetchPrices(true), 5 * 60e3);
@@ -212,18 +273,48 @@ const opt = (v, label, sel) => `<option value="${esc(v)}"${v === sel ? ' selecte
 
 /* ========== Görünümler ========== */
 const state = { tab: 'ana', month: thisMonth(), src: 'hepsi' };
-const TITLES = { ana: 'Ana Sayfa', harcama: 'Harcamalar', yatirim: 'Yatırım', taksit: 'Taksitler', varlik: 'Varlıklar', ayar: 'Ayarlar' };
+const TITLES = { ana: 'Ana Sayfa', harcama: 'Şirket İçi Harcamalar', gelirgider: 'Gelir-Gider', yatirim: 'Yatırım', taksit: 'Taksitler', varlik: 'Varlıklar', ayar: 'Ayarlar', yonetim: 'Yönetim Paneli' };
+// Her sayfanın sağ alttaki yazılı ekle düğmesi
+const FAB = { ana: 'Hızlı Ekle', harcama: 'Harcama Ekle', gelirgider: 'Gelir / Gider Ekle', yatirim: 'Altın / Döviz Ekle', taksit: 'Taksit Ekle', varlik: 'Varlık Ekle' };
 
-function render() {
+function render(keepScroll) {
   $('#title').textContent = TITLES[state.tab];
   $$('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === state.tab));
-  document.body.dataset.tab = state.tab; // menü rengi: başlık, sekme, ＋ düğmesi
+  document.body.dataset.tab = state.tab; // menü rengi: başlık, sekme, ekle düğmesi
   if (!session) return;
+  const y = window.scrollY;
   $('#view').innerHTML = VIEWS[state.tab]();
-  if (state.tab === 'ayar') { loadInvites(); loadGoogle(); loadIcs(); }
-  window.scrollTo(0, 0);
+  $('#fabWrap').innerHTML = FAB[state.tab] ? `<button class="fab" id="fab">${ic('plus')}${FAB[state.tab]}</button>` : '';
+  if (state.tab === 'ayar') { loadGoogle(); loadIcs(); }
+  if (state.tab === 'yonetim') loadAdmin();
+  if (keepScroll) window.scrollTo(0, y); else window.scrollTo(0, 0);
 }
+// Arka planda gelen güncellemeler açık formu bozmasın, kaydırmayı korusun
+function softRender() { if (session && !dlg.open) render(true); }
 function go(tab) { state.tab = tab; render(); if (tab === 'yatirim' || tab === 'ana') fetchPrices(); }
+document.addEventListener('click', e => {
+  if (!e.target.closest('#fab')) return;
+  const t = state.tab;
+  if (t === 'harcama') expenseForm();
+  else if (t === 'gelirgider') flowForm();
+  else if (t === 'taksit') instForm();
+  else if (t === 'varlik') assetForm();
+  else if (t === 'yatirim') chooser('Ne eklemek istiyorsun?', [['metal', 'coins', 'Altın / gümüş', 'var(--gold)'], ['fx', 'wallet', 'Döviz (dolar, euro…)', 'var(--usd)']], k => goldForm(null, k));
+  else if (t === 'ana') chooser('Hızlı ekle', [['harcama', 'briefcase', 'Şirket içi harcama', 'var(--c-harcama)'], ['gelirgider', 'flows', 'Gelir / gider', 'var(--c-gelirgider)'], ['yatirim', 'trend', 'Altın / döviz', 'var(--c-yatirim)'], ['taksit', 'card', 'Taksit', 'var(--c-taksit)'], ['varlik', 'shield', 'Varlık', 'var(--c-varlik)']],
+    k => { go(k); setTimeout(() => $('#fab')?.click(), 0); });
+});
+function chooser(title, opts, cb) {
+  openDlg(`<h3>${title}</h3><div class="chooser">${opts.map(([k, i, l, c]) => `<button data-ch="${k}" style="color:${c}">${ic(i)}<span style="color:var(--fg)">${l}</span></button>`).join('')}</div>
+    <div class="btns"><button class="btn ghost" data-close>Vazgeç</button></div>`);
+  $$('[data-ch]').forEach(b => b.onclick = () => { closeDlg(); cb(b.dataset.ch); });
+}
+// Ay seçici (ok düğmeleri + ayın adına tıklayınca tarayıcının ay seçicisi)
+const monthNav = () => `<div class="monthnav"><button data-mnav="-1" aria-label="Önceki ay">‹</button><label class="m">${fmtMonth(state.month)}<input type="month" id="mPick" value="${state.month}" aria-label="Ay seç"></label><button data-mnav="1" aria-label="Sonraki ay">›</button></div>`;
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-mnav]'); if (b) { state.month = addMonths(state.month, +b.dataset.mnav); render(true); }
+  const p = e.target.closest('#mPick'); if (p && p.showPicker) { e.preventDefault(); try { p.showPicker(); } catch {} }
+});
+document.addEventListener('change', e => { if (e.target.id === 'mPick' && /^\d{4}-\d{2}$/.test(e.target.value)) { state.month = e.target.value; render(true); } });
 document.addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) go(b.dataset.tab); });
 
 const VIEWS = {};
@@ -239,16 +330,19 @@ VIEWS.ana = () => {
   const instMonth = inst.reduce((s, [i]) => s + i.monthly, 0);
   const instLeft = inst.filter(([, f]) => f.dueThisMonth).length;
   const up = upcomingEvents(60);
+  const fl = flowMonth(m);
   return `
   <div class="tiles">
-    <div class="tile" data-tab="harcama"><div class="h"><span>₺</span>Bu ay harcama</div><div class="v">${tl(cep + kart)}</div><div class="s">Cebimden ${tl(cep)} · Kart ${tl(kart)}</div></div>
-    <div class="tile" data-tab="harcama"><div class="h"><span>↩</span>Şirketten alacağım</div><div class="v">${tl(alacak)}</div><div class="s">Cebimden ödenen, geri alınmamış</div></div>
-    <div class="tile" data-tab="yatirim"><div class="h"><span>◆</span>Altın & döviz</div><div class="v">${data.gold.length ? (prices ? tl(g.value) : '…') : '—'}</div><div class="s">${prices ? 'Güncel alış fiyatıyla' : 'Fiyat bekleniyor'}</div></div>
-    <div class="tile" data-tab="taksit"><div class="h"><span>▦</span>Bu ay taksit</div><div class="v">${tl(instMonth)}</div><div class="s">${inst.length ? (instLeft ? instLeft + ' ödeme bekliyor' : 'Hepsi ödendi') : 'Aktif taksit yok'}</div></div>
+    <div class="tile" data-tab="harcama"><div class="h">${ic('briefcase')}Şirket içi · bu ay</div><div class="v">${tl(cep + kart)}</div><div class="s">Cebimden ${tl(cep)} · Kart ${tl(kart)}</div></div>
+    <div class="tile" data-tab="harcama"><div class="h">${ic('back')}Şirketten alacağım</div><div class="v">${tl(alacak)}</div><div class="s">Cebimden ödenen, geri alınmamış</div></div>
+    <div class="tile" data-tab="gelirgider"><div class="h">${ic('flows')}Gelir-gider · bu ay</div><div class="v ${fl.net >= 0 ? 'gelir' : 'gider'}">${fl.net >= 0 ? '+' : ''}${tl(fl.net)}</div><div class="s">Gelir ${tl(fl.gelir)} · Gider ${tl(fl.gider)}</div></div>
+    <div class="tile" data-tab="yatirim"><div class="h">${ic('trend')}Altın & döviz</div><div class="v">${data.gold.length ? (prices ? tl(g.value) : '…') : '—'}</div><div class="s">${prices ? 'Güncel alış fiyatıyla' : 'Fiyat bekleniyor'}</div></div>
+    <div class="tile" data-tab="taksit"><div class="h">${ic('card')}Bu ay taksit</div><div class="v">${tl(instMonth)}</div><div class="s">${inst.length ? (instLeft ? instLeft + ' ödeme bekliyor' : 'Hepsi ödendi') : 'Aktif taksit yok'}</div></div>
+    <div class="tile" data-tab="varlik"><div class="h">${ic('shield')}Varlıklar</div><div class="v">${data.assets.length}</div><div class="s">${up.length ? up.length + ' yenileme 60 gün içinde' : 'Yakın yenileme yok'}</div></div>
   </div>
   <h2>Yaklaşan yenilemeler (60 gün)</h2>
   ${up.length ? `<div class="list">${up.map(({ a, e, d }) => `
-    <div class="item" data-tab="varlik"><div class="ic">⛨</div><div class="t"><b>${esc(a.name)} · ${esc(e.kind)}</b><small>${fmtDate(e.date)}${e.cost ? ' · ' + tl(e.cost) : ''}</small></div>${dayPill(d)}</div>`).join('')}</div>`
+    <div class="item" data-tab="varlik"><div class="ic" style="color:var(--c-varlik)">${ic('shield')}</div><div class="t"><b>${esc(a.name)} · ${esc(e.kind)}</b><small>${fmtDate(e.date)}${e.cost ? ' · ' + tl(e.cost) : ''}</small></div>${dayPill(d)}</div>`).join('')}</div>`
     : '<div class="card empty">Önümüzdeki 60 günde yenileme yok.</div>'}
 `;
 };
@@ -261,7 +355,7 @@ VIEWS.harcama = () => {
   const alacak = data.expenses.filter(x => x.source === 'cep' && !x.reimbursed);
   let lastDay = '';
   return `
-  <div class="row"><input type="month" id="exMonth" value="${state.month}" style="max-width:190px"><div class="btns" style="margin:0"><button class="btn" id="exXlsx">Masraf formu (Excel)</button><label class="btn ghost" style="margin:0">İçe aktar<input type="file" id="exImport" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden></label><button class="btn ghost" id="exCsv">CSV</button></div></div>
+  <div class="row">${monthNav()}<div class="btns" style="margin:0"><button class="btn" id="exXlsx">Masraf formu (Excel)</button><label class="btn ghost" style="margin:0">İçe aktar<input type="file" id="exImport" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden></label><button class="btn ghost" id="exCsv">CSV</button></div></div>
   <div class="tiles" style="margin-top:10px">
     <div class="tile"><div class="h">Cebimden</div><div class="v gider">${tl(sum('cep'))}</div></div>
     <div class="tile"><div class="h">Şirket kartı</div><div class="v transfer">${tl(sum('kart'))}</div></div>
@@ -272,10 +366,9 @@ VIEWS.harcama = () => {
   </div>
   <h2>${fmtMonth(state.month)}</h2>
   ${list.length ? `<div class="list">${list.map(x => { const day = x.date !== lastDay ? `<div class="day">${fmtDate(lastDay = x.date)}</div>` : ''; return day + `
-    <div class="item" data-ex="${x.id}"><div class="ic ${x.source === 'cep' ? 'gider' : 'transfer'}">${x.source === 'cep' ? 'C' : 'K'}</div>
+    <div class="item" data-ex="${x.id}"><div class="ic ${x.source === 'cep' ? 'gider' : 'transfer'}" title="${SRC[x.source]}">${ic(x.source === 'cep' ? 'wallet' : 'card')}</div>
       <div class="t"><b>${esc(x.note || x.category)}</b><small>${esc(x.category)} · ${SRC[x.source]}${x.receipt ? ' · 📎' : ''}${x.source === 'cep' ? (x.reimbursed ? ' <span class="pill good">alındı</span>' : ' <span class="pill warn">alınacak</span>') : ''}</small></div>
-      <div class="amt">${tl(x.amount)}</div></div>`; }).join('')}</div>` : '<div class="card empty">Bu ay kayıt yok.</div>'}
-  <button class="fab" id="exAdd" aria-label="Harcama ekle">＋</button>`;
+      <div class="amt">${tl(x.amount)}</div></div>`; }).join('')}</div>` : '<div class="card empty">Bu ay kayıt yok.</div>'}`;
 };
 function expenseForm(x) {
   const e = x || { source: 'cep', date: today(), category: data.categories[0], amount: '', note: '', reimbursed: false };
@@ -305,9 +398,8 @@ function expenseForm(x) {
   };
 }
 document.addEventListener('click', e => {
-  if (e.target.closest('#exAdd')) expenseForm();
   const it = e.target.closest('[data-ex]'); if (it) expenseForm(data.expenses.find(x => x.id === it.dataset.ex));
-  const s = e.target.closest('#srcSeg button'); if (s) { state.src = s.dataset.src; render(); }
+  const s = e.target.closest('#srcSeg button'); if (s) { state.src = s.dataset.src; render(true); }
   if (e.target.closest('#exReimb') && confirm('Cebimden yapılan tüm harcamalar "geri alındı" işaretlensin mi?')) { data.expenses.forEach(x => { if (x.source === 'cep') x.reimbursed = true; }); commit(); }
   if (e.target.closest('#exCsv')) {
     const rows = [['Tarih', 'Tür', 'Kategori', 'Açıklama', 'Tutar', 'Geri alındı']].concat(
@@ -316,7 +408,6 @@ document.addEventListener('click', e => {
     download(`harcamalar-${state.month}.csv`, '﻿' + rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\r\n'), 'text/csv');
   }
 });
-document.addEventListener('change', e => { if (e.target.id === 'exMonth' && e.target.value) { state.month = e.target.value; render(); } });
 
 /* Şirket masraf formu (xlsx) */
 // integrity: dosya değiştirilmişse tarayıcı çalıştırmaz (SRI)
@@ -331,9 +422,12 @@ async function importMasraf(file) {
   try { await loadXlsxLibs(); res = await Masraf.parse(JSZip, await file.arrayBuffer()); }
   catch (e) { return toast('Dosya okunamadı: ' + e.message); }
   if (!res.rows.length) return toast('Dosyada aktarılacak harcama bulunamadı');
-  const key = x => [x.date, x.source, Math.round(x.amount * 100), norm2(x.note || ''), norm2(x.category || '')].join('|');
   const norm2 = s => String(s).toLocaleLowerCase('tr-TR').trim();
-  const have = new Set(data.expenses.map(key));
+  // Eşleştirme: aynı gün + aynı tür (kart/cep) + aynı tutar = aynı harcama. Açıklama yazımı farklı olsa da yakalanır.
+  // Sayaçlı eşleşme: o gün aynı tutarda 2 harcama varsa ve dosyada 3 tane varsa yalnızca 1'i yeni sayılır.
+  const key = x => [x.date, x.source, Math.round(x.amount * 100)].join('|');
+  const pool = new Map(); for (const x of data.expenses) pool.set(key(x), (pool.get(key(x)) || 0) + 1);
+  const take = kk => { const n = pool.get(kk) || 0; if (n > 0) { pool.set(kk, n - 1); return true; } return false; };
   const cats = data.categories.map(norm2);
   const items = res.rows.map((r, i) => {
     // Masraf Adı → kategori, Harcama Nedeni → açıklama. Masraf Adı boşsa ve neden bir kategori adıysa onu kategori say.
@@ -342,25 +436,26 @@ async function importMasraf(file) {
     if (!category) category = 'Diğer';
     const ci = cats.indexOf(norm2(category)); if (ci >= 0) category = data.categories[ci];
     const rec = { id: uid(), source: r.source, amount: r.amount, date: r.date, category, note, reimbursed: false, receipt: null };
-    return { i, rec, dup: have.has(key(rec)), newCat: !data.categories.includes(category) };
+    return { i, rec, dup: take(key(rec)), newCat: !data.categories.includes(category) };
   });
+  const newCount = items.filter(x => !x.dup).length;
   const newCats = [...new Set(items.filter(x => x.newCat).map(x => x.rec.category))];
   const sum = s => items.filter(x => x.rec.source === s).reduce((t, x) => t + x.rec.amount, 0);
   openDlg(`<form id="impForm"><h3 style="margin:0">İçe aktar · ${esc(file.name)}</h3>
     <p class="muted">${items.length} harcama bulundu · Şirket kartı ${tl(sum('kart'))} · Cebimden ${tl(sum('cep'))}${res.skipped.length ? ` · ${res.skipped.length} satır atlandı (${res.skipped.map(s => s.row + '. satır: ' + s.why).join(', ')})` : ''}</p>
-    ${items.some(x => x.dup) ? '<p class="muted">Uygulamada zaten olanlar <span class="pill warn">zaten var</span> olarak işaretli ve seçili değil.</p>' : ''}
+    <p><b>${newCount ? `${newCount} yeni harcama` : 'Yeni harcama yok'}</b>${items.length - newCount ? ` · ${items.length - newCount} tanesi uygulamada zaten var (aynı gün, aynı tür ve aynı tutar) ve seçili değil` : ''}.</p>
     ${newCats.length ? `<p class="muted">Yeni kategoriler eklenecek: <b>${newCats.map(esc).join(', ')}</b></p>` : ''}
-    <div class="list" style="max-height:45vh;overflow:auto">${items.map(x => `
+    <div class="list" style="max-height:45vh;overflow:auto">${[...items].sort((a, b) => a.dup - b.dup || a.rec.date.localeCompare(b.rec.date)).map(x => `
       <label class="item" style="margin:0;color:var(--fg)"><input type="checkbox" class="chk" name="sel" value="${x.i}" ${x.dup ? '' : 'checked'}>
         <div class="t"><b>${esc(x.rec.note || x.rec.category)}${x.dup ? ' <span class="pill warn">zaten var</span>' : ''}</b><small>${fmtDate(x.rec.date)} · ${esc(x.rec.category)} · ${SRC[x.rec.source]}</small></div>
         <div class="amt">${tl(x.rec.amount)}</div></label>`).join('')}</div>
     <label><input type="checkbox" class="chk" name="reimb">Cebimden olanları “şirketten geri alındı” işaretle</label>
-    <button class="btn block">Seçilenleri aktar</button><div class="btns"><button type="button" class="btn ghost" data-close>Vazgeç</button></div></form>`);
+    <button class="btn block">${newCount ? 'Seçilenleri aktar' : 'Kapat'}</button><div class="btns"><button type="button" class="btn ghost" data-close>Vazgeç</button></div></form>`);
   $('#impForm').onsubmit = ev => {
     ev.preventDefault(); const f = new FormData(ev.target);
     const sel = new Set(f.getAll('sel').map(Number)), reimb = !!f.get('reimb');
     const chosen = items.filter(x => sel.has(x.i));
-    if (!chosen.length) return toast('Hiç harcama seçilmedi');
+    if (!chosen.length) { closeDlg(); return toast(newCount ? 'Hiç harcama seçilmedi' : 'Dosyadaki harcamaların hepsi zaten uygulamada'); }
     for (const c of newCats) if (chosen.some(x => x.rec.category === c) && !data.categories.includes(c)) data.categories.push(c);
     for (const x of chosen) data.expenses.push({ ...x.rec, reimbursed: reimb && x.rec.source === 'cep' });
     const months = [...new Set(chosen.map(x => x.rec.date.slice(0, 7)))].sort();
@@ -402,6 +497,89 @@ function masrafForm() {
 document.addEventListener('click', e => { if (e.target.closest('#exXlsx')) masrafForm(); });
 function download(name, text, type) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); }
 
+/* --- Gelir-Gider (düzenli / tek seferlik; burs, kira, elden borç…) --- */
+const FREQ = { aylik: 'Düzenli (her ay)', tek: 'Tek seferlik' };
+const flowActiveIn = (f, m) => f.freq === 'aylik' ? (f.start <= m && (!f.end || m <= f.end)) : (f.date || '').startsWith(m);
+function flowMonth(m) {
+  const list = (data.flows || []).filter(f => flowActiveIn(f, m));
+  const gelir = list.filter(f => f.type === 'gelir').reduce((s, f) => s + f.amount, 0);
+  const gider = list.filter(f => f.type === 'gider').reduce((s, f) => s + f.amount, 0);
+  return { list, gelir, gider, net: gelir - gider };
+}
+VIEWS.gelirgider = () => {
+  const fl = data.flows || [];
+  const mm = flowMonth(state.month);
+  const reg = fl.filter(f => f.freq === 'aylik').sort((a, b) => a.type.localeCompare(b.type) || b.amount - a.amount);
+  const once = fl.filter(f => f.freq === 'tek').sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const open = once.filter(f => f.track && !f.settled);
+  const openIn = open.filter(f => f.type === 'gelir').reduce((s, f) => s + f.amount, 0); // bana verilen → geri ödeyeceğim
+  const openOut = open.filter(f => f.type === 'gider').reduce((s, f) => s + f.amount, 0); // benim verdiğim → geri alacağım
+  const row = f => {
+    const regText = f.freq === 'aylik' ? `her ay${f.day ? ' ' + f.day + '’inde' : ''} · ${fmtMonth(f.start)}${f.end ? ' – ' + fmtMonth(f.end) : ' → devam ediyor'}` : fmtDate(f.date);
+    const st = f.freq === 'tek' && f.track ? (f.settled ? '<span class="pill good">kapandı</span>' : `<span class="pill warn">${f.type === 'gelir' ? 'geri ödenecek' : 'geri alınacak'}</span>`) : '';
+    const ended = f.freq === 'aylik' && f.end && f.end < thisMonth() ? '<span class="pill">bitti</span>' : '';
+    return `<div class="item" data-flow="${f.id}"><div class="ic ${f.type}">${ic(f.type === 'gelir' ? 'arrowDown' : 'arrowUp')}</div>
+      <div class="t"><b>${esc(f.name)}${f.person ? ' · ' + esc(f.person) : ''} ${st}${ended}</b><small>${regText}${f.note ? ' · ' + esc(f.note) : ''}</small></div>
+      <div style="text-align:right"><div class="amt ${f.type}">${f.type === 'gelir' ? '+' : '−'}${tl(f.amount)}</div>
+      ${f.freq === 'tek' && f.track && !f.settled ? `<button class="btn ghost sm" style="margin-top:4px" data-settle="${f.id}">Kapandı</button>` : ''}</div></div>`;
+  };
+  return `
+  <div class="row">${monthNav()}</div>
+  <div class="tiles" style="margin-top:10px">
+    <div class="tile"><div class="h">${ic('arrowDown')} Gelir</div><div class="v gelir">${tl(mm.gelir)}</div><div class="s">${fmtMonth(state.month)}</div></div>
+    <div class="tile"><div class="h">${ic('arrowUp')} Gider</div><div class="v gider">${tl(mm.gider)}</div><div class="s">Net: <b class="${mm.net >= 0 ? 'gelir' : 'gider'}">${mm.net >= 0 ? '+' : ''}${tl(mm.net)}</b></div></div>
+  </div>
+  ${open.length ? `<div class="card" style="margin-top:10px"><b>${ic('handshake')} Açık hesaplar</b>
+    <div class="kv"><span>Geri ödeyeceğim (bana verilen)</span><b class="gider">${tl(openIn)}</b></div>
+    <div class="kv"><span>Geri alacağım (benim verdiğim)</span><b class="gelir">${tl(openOut)}</b></div></div>` : ''}
+  <h2>${fmtMonth(state.month)} hareketleri</h2>
+  ${mm.list.length ? `<div class="list">${mm.list.map(row).join('')}</div>` : '<div class="card empty">Bu ay gelir ya da gider yok.</div>'}
+  <h2>Düzenli kaynaklar</h2>
+  ${reg.length ? `<div class="list">${reg.map(row).join('')}</div>` : '<div class="card empty">Burs, maaş, kira, abonelik gibi her ay tekrar edenleri ekle.</div>'}
+  <h2>Tek seferlik</h2>
+  ${once.length ? `<div class="list">${once.map(row).join('')}</div>` : '<div class="card empty">Elden borç, satış, hediye gibi bir kerelik kayıtlar burada görünür.</div>'}`;
+};
+function flowForm(x) {
+  const e = x || { type: 'gelir', freq: 'aylik', name: '', person: '', amount: '', start: state.month, end: '', day: '', date: today(), track: false, settled: false, note: '' };
+  openDlg(`<form id="flForm"><h3>${x ? 'Kaydı düzenle' : 'Gelir / gider ekle'}</h3>
+    <div class="seg wide" id="flType" style="margin-top:12px"><button type="button" data-v="gelir" class="${e.type === 'gelir' ? 'on' : ''}">Gelir</button><button type="button" data-v="gider" class="${e.type === 'gider' ? 'on' : ''}">Gider</button></div>
+    <div class="seg wide" id="flFreq" style="margin-top:8px">${Object.entries(FREQ).map(([k, v]) => `<button type="button" data-v="${k}" class="${e.freq === k ? 'on' : ''}">${v}</button>`).join('')}</div>
+    <label>Kaynak / ne için?</label><input name="name" required value="${esc(e.name)}" placeholder="Burs, maaş, kira, borç…">
+    <div class="two"><div><label>Tutar (₺)</label><input name="amount" inputmode="decimal" required value="${e.amount || ''}"></div>
+      <div><label>Kişi / kurum (ops.)</label><input name="person" value="${esc(e.person || '')}" placeholder="ör. KYK, Ali"></div></div>
+    <div id="flReg" style="${e.freq === 'aylik' ? '' : 'display:none'}">
+      <div class="two"><div><label>Başlangıç ayı</label><input type="month" name="start" value="${e.start || state.month}"></div>
+        <div><label>Bitiş ayı (ops.)</label><input type="month" name="end" value="${e.end || ''}"></div></div>
+      <label>Ayın kaçında? (ops.)</label><input name="day" type="number" min="1" max="31" value="${e.day || ''}">
+    </div>
+    <div id="flOnce" style="${e.freq === 'tek' ? '' : 'display:none'}">
+      <label>Tarih</label><input type="date" name="date" value="${e.date || today()}">
+      <label><input type="checkbox" class="chk" name="track" ${e.track ? 'checked' : ''}>Elden borç — geri ödenene kadar takip et</label>
+      ${x && e.track ? `<label><input type="checkbox" class="chk" name="settled" ${e.settled ? 'checked' : ''}>Kapandı (geri ödendi)</label>` : ''}
+    </div>
+    <label>Not</label><input name="note" value="${esc(e.note || '')}">
+    <button class="btn block">Kaydet</button>
+    <div class="btns">${x ? '<button type="button" class="btn danger" id="flDel">Sil</button>' : ''}<button type="button" class="btn ghost" data-close>Vazgeç</button></div></form>`);
+  let type = e.type, freq = e.freq;
+  const seg = (id, fn) => $$(`#${id} button`).forEach(b => b.onclick = () => { $$(`#${id} button`).forEach(o => o.classList.toggle('on', o === b)); fn(b.dataset.v); });
+  seg('flType', v => type = v);
+  seg('flFreq', v => { freq = v; $('#flReg').style.display = v === 'aylik' ? '' : 'none'; $('#flOnce').style.display = v === 'tek' ? '' : 'none'; });
+  if ($('#flDel')) $('#flDel').onclick = () => { if (confirm('Bu kayıt silinsin mi?')) { data.flows = data.flows.filter(o => o.id !== x.id); closeDlg(); commit(); } };
+  $('#flForm').onsubmit = ev => { ev.preventDefault(); const f = new FormData(ev.target);
+    const rec = { id: e.id || uid(), type, freq, name: f.get('name').trim(), person: f.get('person').trim(), amount: num(f.get('amount')), note: f.get('note').trim() };
+    if (!rec.amount) return toast('Tutar gir');
+    if (freq === 'aylik') { Object.assign(rec, { start: f.get('start') || thisMonth(), end: f.get('end') || '', day: parseInt(f.get('day')) || null }); if (rec.end && rec.end < rec.start) return toast('Bitiş ayı başlangıçtan önce olamaz'); }
+    else Object.assign(rec, { date: f.get('date') || today(), track: !!f.get('track'), settled: !!f.get('settled') });
+    data.flows ||= [];
+    if (x) { for (const k of Object.keys(x)) delete x[k]; Object.assign(x, rec); } else data.flows.push(rec);
+    closeDlg(); commit(); };
+}
+document.addEventListener('click', e => {
+  const st = e.target.closest('[data-settle]');
+  if (st) { const f = data.flows.find(o => o.id === st.dataset.settle); f.settled = true; f.settledDate = today(); toast('Kapandı olarak işaretlendi'); return commit(); }
+  const it = e.target.closest('[data-flow]'); if (it) flowForm(data.flows.find(o => o.id === it.dataset.flow));
+});
+
 /* --- Yatırım --- */
 VIEWS.yatirim = () => {
   const g = goldTotals(); const pl = g.value - g.cost;
@@ -413,10 +591,10 @@ VIEWS.yatirim = () => {
   const holdColor = t => ({ USD: 'var(--usd)', EUR: 'var(--eur)', GBP: 'var(--gbp)', CHF: 'var(--chf)', GUMUS: 'var(--muted)' })[t] || (isFx(t) ? 'var(--fx)' : 'var(--gold)');
   const chg = c => `<span class="${c >= 0 ? 'up' : 'down'}">${c >= 0 ? '▲' : '▼'} %${Math.abs(c).toLocaleString('tr-TR')}</span>`;
   const holdRow = x => { const p = prices?.items[x.type]; const fx = isFx(x.type); return `
-      <div class="item" data-gold="${x.id}"><div class="ic" style="color:${holdColor(x.type)}">${fx ? (FX_SYMBOL[x.type] || x.type.slice(0, 1)) : '◆'}</div>
+      <div class="item" data-gold="${x.id}"><div class="ic" style="color:${holdColor(x.type)}">${fx ? (FX_SYMBOL[x.type] || x.type.slice(0, 1)) : ic('coins')}</div>
         <div class="t"><b>${fx ? esc(FX_TYPES[x.type]) : esc(METAL_TYPES[x.type])} ${qtyText(x)}</b><small>${p ? (fx ? 'Kur ' : 'Birim ') + rate(p.buy) + ' · ' + chg(p.change) : ''}${x.note ? ' · ' + esc(x.note) : ''}</small></div>
         <div class="amt">${p ? tl(goldValue(x)) : '…'}</div></div>`; };
-  const market = (types, title, cls) => `<div class="subhead ${cls}">${title}</div>` + Object.keys(types).filter(k => prices.items[k]).map(k => `<div class="kv"><span><b style="color:${holdColor(k)}">${isFx(k) ? (FX_SYMBOL[k] || '') + ' ' + k : '◆'}</b> ${types[k]}</span><span>${rate(prices.items[k].buy)} / ${rate(prices.items[k].sell)} ${chg(prices.items[k].change)}</span></div>`).join('');
+  const market = (types, title, cls) => `<div class="subhead ${cls}">${title}</div>` + Object.keys(types).filter(k => prices.items[k]).map(k => `<div class="kv mkt"><span><b style="color:${holdColor(k)}">${isFx(k) ? (FX_SYMBOL[k] || '') + ' ' + k : '◆'}</b> ${types[k]}</span><span class="r">${rate(prices.items[k].buy)} / ${rate(prices.items[k].sell)}<br><small>${chg(prices.items[k].change)}</small></span></div>`).join('');
   return `
   <h2>Altın & Döviz</h2>
   <div class="card">
@@ -429,12 +607,11 @@ VIEWS.yatirim = () => {
   <div class="list" style="margin-top:10px">
     ${data.gold.length ? [...data.gold].sort((a, b) => isFx(a.type) - isFx(b.type)).map(holdRow).join('') : '<div class="empty">Henüz altın ya da döviz eklenmedi.</div>'}
   </div>
-  <div class="btns"><button class="btn" id="goldAdd" data-kind="metal">＋ Altın / gümüş ekle</button><button class="btn" id="fxAdd">＋ Döviz ekle</button></div>
   ${prices ? `<h2>Piyasa</h2><div class="card">${market(METAL_TYPES, 'Altın & gümüş', 'gold')}${market(FX_TYPES, 'Döviz', 'fx')}<div class="muted" style="margin-top:6px">Alış / satış (TL)</div></div>` : ''}
   <h2>Yatırım notları</h2>
   ${data.notes.length ? `<div class="list">${[...data.notes].sort((a, b) => b.date.localeCompare(a.date)).map(n => `
-    <div class="item" data-note="${n.id}"><div class="ic">✎</div><div class="t"><b>${esc(n.title)}</b><small>${fmtDate(n.date)} · ${esc(n.body.slice(0, 70))}</small></div></div>`).join('')}</div>` : '<div class="card empty">Not yok.</div>'}
-  <div class="btns"><button class="btn ghost" id="noteAdd">＋ Not ekle</button></div>`;
+    <div class="item" data-note="${n.id}"><div class="ic">${ic('pencil')}</div><div class="t"><b>${esc(n.title)}</b><small>${fmtDate(n.date)} · ${esc(n.body.slice(0, 70))}</small></div></div>`).join('')}</div>` : '<div class="card empty">Not yok.</div>'}
+  <div class="btns"><button class="btn ghost" id="noteAdd">${ic('pencil')} Not ekle</button></div>`;
 };
 function goldForm(x, kind) {
   const fx = x ? isFx(x.type) : kind === 'fx';
@@ -467,8 +644,6 @@ function noteForm(x) {
     if (x) Object.assign(x, rec); else data.notes.push(rec); closeDlg(); commit(); };
 }
 document.addEventListener('click', e => {
-  if (e.target.closest('#goldAdd')) goldForm(null, 'metal');
-  if (e.target.closest('#fxAdd')) goldForm(null, 'fx');
   if (e.target.closest('#noteAdd')) noteForm();
   if (e.target.closest('#pxRefresh')) { toast('Fiyatlar güncelleniyor…'); fetchPrices(true); }
   const g = e.target.closest('[data-gold]'); if (g) goldForm(data.gold.find(x => x.id === g.dataset.gold));
@@ -485,7 +660,7 @@ VIEWS.taksit = () => {
   const next = Array.from({ length: 6 }, (_, k) => { const m = addMonths(thisMonth(), k); return [m, all.reduce((s, [i]) => { const d = monthDiff(i.start, m); return s + (d >= 0 && d < i.count ? i.monthly : 0); }, 0)]; });
   const max = Math.max(1, ...next.map(n => n[1]));
   const row = ([i, f]) => `
-    <div class="item" data-inst="${i.id}"><div class="ic">▦</div>
+    <div class="item" data-inst="${i.id}"><div class="ic">${ic('card')}</div>
       <div class="t"><b>${esc(i.name)}${i.card ? ' <span class="pill">💳 kredi kartı</span>' : ''}</b><small>${f.paidCount}/${i.count} ödendi · son: ${fmtMonth(f.end)}${i.day && !i.card ? ' · her ayın ' + i.day + '’i' : ''}</small>
         <div class="bar" style="color:var(--acc)"><i style="width:${(f.paidCount / i.count) * 100}%"></i></div></div>
       <div style="text-align:right"><div class="amt">${tl(i.monthly)}</div>
@@ -497,8 +672,7 @@ VIEWS.taksit = () => {
   ${act.length ? `<div class="list">${act.map(row).join('')}</div>` : '<div class="card empty">Aktif taksit yok.</div>'}
   <h2>Önümüzdeki 6 ay</h2>
   <div class="card">${next.map(([m, v]) => `<div style="margin:6px 0"><div class="row"><span>${fmtMonth(m)}</span><b>${tl(v)}</b></div><div class="bar" style="color:var(--acc)"><i style="width:${(v / max) * 100}%"></i></div></div>`).join('')}</div>
-  ${all.some(([, f]) => f.finished) ? `<h2>Biten taksitler</h2><div class="list">${all.filter(([, f]) => f.finished).map(row).join('')}</div>` : ''}
-  <button class="fab" id="instAdd" aria-label="Taksit ekle">＋</button>`;
+  ${all.some(([, f]) => f.finished) ? `<h2>Biten taksitler</h2><div class="list">${all.filter(([, f]) => f.finished).map(row).join('')}</div>` : ''}`;
 };
 function instForm(x) {
   const e = x || { name: '', monthly: '', count: '', start: thisMonth(), day: '', paid: [] };
@@ -522,7 +696,6 @@ function instForm(x) {
     if (x) Object.assign(x, rec); else data.installments.push(rec); closeDlg(); commit(); };
 }
 document.addEventListener('click', e => {
-  if (e.target.closest('#instAdd')) return instForm();
   const p = e.target.closest('[data-pay]');
   if (p) { const i = data.installments.find(x => x.id === p.dataset.pay); if (!i.paid.includes(thisMonth())) i.paid.push(thisMonth()); toast('Bu ayın taksiti ödendi'); return commit(); }
   const it = e.target.closest('[data-inst]'); if (it) instForm(data.installments.find(x => x.id === it.dataset.inst));
@@ -530,8 +703,7 @@ document.addEventListener('click', e => {
 
 /* --- Varlıklar --- */
 function gcalUrl(a, ev) {
-  const d = ev.date.replace(/-/g, ''); const n = new Date(ev.date + 'T00:00'); n.setDate(n.getDate() + 1);
-  const d2 = n.toISOString().slice(0, 10).replace(/-/g, '');
+  const d = ev.date.replace(/-/g, ''), d2 = addDaysIso(ev.date, 1).replace(/-/g, '');
   const p = new URLSearchParams({ action: 'TEMPLATE', text: `${a.name} — ${ev.kind} yenileme`, dates: `${d}/${d2}`,
     details: [ev.company && 'Şirket: ' + ev.company, ev.cost && 'Son tutar: ' + tl(ev.cost), ev.note].filter(Boolean).join('\n'), recur: 'RRULE:FREQ=YEARLY' });
   return 'https://calendar.google.com/calendar/render?' + p.toString();
@@ -541,13 +713,12 @@ VIEWS.varlik = () => `
     <h2>${esc(a.name)}${a.detail ? ' · ' + esc(a.detail) : ''}</h2>
     <div class="list">
       ${a.events.length ? [...a.events].sort((x, y) => x.date.localeCompare(y.date)).map(ev => `
-        <div class="item" data-ev="${a.id}|${ev.id}"><div class="ic">⛨</div>
+        <div class="item" data-ev="${a.id}|${ev.id}"><div class="ic">${ic('calendar')}</div>
           <div class="t"><b>${esc(ev.kind)}</b><small>${fmtDate(ev.date)}${ev.cost ? ' · ' + tl(ev.cost) : ''}${ev.company ? ' · ' + esc(ev.company) : ''}</small></div>${dayPill(daysUntil(ev.date))}</div>`).join('')
       : '<div class="empty">Henüz kayıt yok.</div>'}
     </div>
-    <div class="btns"><button class="btn ghost" data-evadd="${a.id}">＋ Sigorta / kasko / tarih ekle</button><button class="btn ghost" data-asset="${a.id}">Düzenle</button></div>`).join('')
-  : '<div class="card empty">Araba, ev gibi varlıklarını ekle; sigorta, kasko, muayene tarihlerini takip et.</div>'}
-  <button class="fab" id="assetAdd" aria-label="Varlık ekle">＋</button>`;
+    <div class="btns"><button class="btn ghost" data-evadd="${a.id}">${ic('plus')} Sigorta / kasko / tarih ekle</button><button class="btn ghost" data-asset="${a.id}">${ic('pencil')} Düzenle</button></div>`).join('')
+  : '<div class="card empty">Araba, ev, laptop gibi varlıklarını ekle; sigorta, kasko, muayene, bakım tarihlerini takip et.</div>'}`;
 function assetForm(x) {
   const e = x || { name: '', detail: '' };
   openDlg(`<form id="aForm"><h3 style="margin:0">${x ? 'Varlığı düzenle' : 'Varlık ekle'}</h3>
@@ -575,8 +746,8 @@ function eventForm(a, x) {
   if ($('#evDel')) $('#evDel').onclick = () => { if (confirm('Silinsin mi?')) { a.events = a.events.filter(o => o.id !== x.id); closeDlg(); commit(); } };
   if ($('#evRenew')) $('#evRenew').onclick = () => {
     const c = prompt('Yeni dönemin tutarı (₺)?', x.cost || ''); if (c === null) return;
-    (x.history ||= []).push({ date: x.date, cost: x.cost }); const d = new Date(x.date + 'T00:00'); d.setFullYear(d.getFullYear() + 1);
-    x.date = d.toISOString().slice(0, 10); x.cost = num(c) || x.cost; closeDlg(); commit(); toast('Yeni tarih: ' + fmtDate(x.date));
+    (x.history ||= []).push({ date: x.date, cost: x.cost });
+    x.date = addYearsIso(x.date, 1); x.cost = num(c) || x.cost; closeDlg(); commit(); toast('Yeni tarih: ' + fmtDate(x.date));
   };
   $('#evForm').onsubmit = ev => { ev.preventDefault(); const f = new FormData(ev.target);
     const rec = { kind: f.get('kind'), date: f.get('date'), cost: num(f.get('cost')) || null, company: f.get('company').trim(), note: f.get('note').trim() };
@@ -588,7 +759,6 @@ function eventForm(a, x) {
   };
 }
 document.addEventListener('click', e => {
-  if (e.target.closest('#assetAdd')) return assetForm();
   const ed = e.target.closest('[data-asset]'); if (ed) return assetForm(data.assets.find(a => a.id === ed.dataset.asset));
   const ad = e.target.closest('[data-evadd]'); if (ad) return eventForm(data.assets.find(a => a.id === ad.dataset.evadd));
   const ev = e.target.closest('[data-ev]'); if (ev) { const [aid, eid] = ev.dataset.ev.split('|'); const a = data.assets.find(o => o.id === aid); eventForm(a, a.events.find(o => o.id === eid)); }
@@ -602,13 +772,9 @@ VIEWS.ayar = () => `
       <button class="btn ghost" id="logout">Çıkış yap</button></div>
     <div class="btns"><button class="btn ghost" id="pwBtn">Şifre değiştir</button><button class="btn ghost" id="pullBtn">Sunucudan yükle</button></div>
   </div>
-  ${session.user.isAdmin ? `<h2>Davetler</h2>
-  <div class="card">
-    <p class="muted" style="margin-top:0">Hesaplar yalnızca davet linkiyle açılır. Her link tek kişilik ve süreli. Her kullanıcının verisi kendine özeldir.</p>
-    <form id="invForm" class="two"><input name="note" placeholder="Kimin için? (ops.)" maxlength="80"><select name="days">${[1, 3, 7, 14, 30].map(d => opt(String(d), d + ' gün geçerli', '7')).join('')}</select>
-      <button class="btn" style="grid-column:1/-1">Davet linki oluştur</button></form>
-    <div id="invList" class="muted" style="margin-top:12px">Yükleniyor…</div>
-  </div>` : ''}
+  ${session.user.isAdmin ? `<h2>Yönetim</h2>
+  <div class="card"><div class="row"><div><b>${ic('users')} Yönetim paneli</b><div class="muted">Kullanıcılar, davetler ve duyurular</div></div>
+    <button class="btn" data-tab="yonetim" style="background:var(--c-yonetim)">Aç</button></div></div>` : ''}
   <h2>Google Takvim</h2>
   <div class="card" id="gBox">${gBoxHtml()}</div>
   <h2>Takvim abonelik linki</h2>
@@ -734,6 +900,95 @@ document.addEventListener('click', async e => {
   }
 });
 
+/* ========== Yönetim paneli (yalnızca yönetici) ========== */
+const ANN_LEVEL = { info: 'Bilgi', guncelleme: 'Güncelleme', onemli: 'Önemli' };
+const dt = t => t ? new Date(t).toLocaleString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+const kb = b => b > 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round((b || 0) / 1024)) + ' KB';
+VIEWS.yonetim = () => {
+  if (!session.user.isAdmin) return '<div class="card empty">Bu sayfa yalnızca yönetici içindir.</div>';
+  return `
+  <div class="btns" style="margin-top:0"><button class="btn ghost sm" data-tab="ayar">${ic('back')} Ayarlara dön</button></div>
+  <h2>Kullanıcılar</h2><div id="admUsers" class="muted">Yükleniyor…</div>
+  <h2>Duyuru gönder</h2>
+  <div class="card"><form id="annForm">
+    <label>Başlık</label><input name="title" required maxlength="120" placeholder="ör. Yeni özellik: Gelir-Gider">
+    <label>Metin</label><textarea name="body" rows="4" maxlength="4000" placeholder="Kullanıcıların zil simgesinde göreceği mesaj"></textarea>
+    <label>Tür</label><select name="level">${Object.entries(ANN_LEVEL).map(([k, v]) => opt(k, v, 'info')).join('')}</select>
+    <button class="btn block">Duyuruyu gönder</button></form>
+    <div id="admAnn" style="margin-top:12px"></div></div>
+  <h2>Davetler</h2>
+  <div class="card">
+    <p class="muted" style="margin-top:0">Hesaplar yalnızca davet linkiyle açılır. Her link tek kişilik ve süreli; her kullanıcının verisi kendine özeldir.</p>
+    <form id="invForm"><div class="two"><input name="note" placeholder="Kimin için? (ops.)" maxlength="80"><select name="days" aria-label="Geçerlilik süresi">${[1, 3, 7, 14, 30].map(d => opt(String(d), d + ' gün geçerli', '7')).join('')}</select></div>
+      <button class="btn block" style="margin-top:10px">Davet linki oluştur</button></form>
+    <div id="invList" class="muted" style="margin-top:12px">Yükleniyor…</div>
+  </div>`;
+};
+async function loadAdmin() {
+  loadInvites(); loadAdminAnn();
+  const box = $('#admUsers'); if (!box) return;
+  try {
+    const { users } = await api('/api/admin/users');
+    box.innerHTML = users.map(u => {
+      const me = u.id === session.user.id;
+      const how = u.invited_by_name ? `${esc(u.invited_by_name)} davetiyle${u.invite_note ? ' (“' + esc(u.invite_note) + '”)' : ''}` : 'ilk yönetici daveti';
+      return `<div class="user"><div class="row"><div><b>${esc(u.username)}</b>${u.is_admin ? '<span class="pill good">yönetici</span>' : ''}${u.disabled ? '<span class="pill bad">erişim kapalı</span>' : ''}${me ? '<span class="pill info">sen</span>' : ''}</div>
+          <span class="muted">${u.sessions} açık oturum</span></div>
+        <div class="muted" style="margin-top:4px;line-height:1.6">Giriş yolu: ${how}<br>Kayıt: ${dt(u.created_at)} · Son giriş: ${dt(u.last_login)} · Son görülme: ${dt(u.last_seen)}<br>
+          Veri: ${kb(u.data_size)} · Fiş: ${u.receipts} adet (${kb(u.receipt_bytes)})${u.google ? ' · Google Takvim bağlı' : ''}</div>
+        ${me ? '' : `<div class="btns"><button class="btn ghost sm" data-adm="logout" data-id="${u.id}">Oturumlarını kapat</button>
+          ${u.disabled ? `<button class="btn sm" data-adm="enable" data-id="${u.id}">Erişimi aç</button>` : `<button class="btn ghost sm" data-adm="disable" data-id="${u.id}">Erişimi kes</button>`}
+          <button class="btn danger sm" data-adm="delete" data-id="${u.id}" data-name="${esc(u.username)}">Hesabı sil</button></div>`}</div>`;
+    }).join('');
+  } catch (e) { box.textContent = e.message; }
+}
+async function loadAdminAnn() {
+  const box = $('#admAnn'); if (!box) return;
+  try {
+    const { announcements } = await api('/api/announcements');
+    box.innerHTML = announcements.length ? '<div class="muted"><b>Gönderilen duyurular</b></div>' + announcements.map(a => `<div class="ann ${a.level}"><div class="row"><b>${esc(a.title)}</b><button class="btn ghost sm" data-anndel="${a.id}">Sil</button></div>
+      ${a.body ? `<div class="note">${esc(a.body)}</div>` : ''}<small>${ANN_LEVEL[a.level] || ''} · ${dt(a.created_at)}</small></div>`).join('') : '<div class="muted">Henüz duyuru yok.</div>';
+  } catch (e) { box.textContent = e.message; }
+}
+const ADM_CONFIRM = { logout: 'Bu kullanıcının tüm cihazlardaki oturumları kapatılsın mı? (Tekrar giriş yapabilir)', disable: 'Bu kullanıcının erişimi kesilsin mi? Oturumları kapanır ve sen açana kadar giriş yapamaz.', enable: 'Bu kullanıcının erişimi tekrar açılsın mı?' };
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-adm]');
+  if (b) {
+    const a = b.dataset.adm;
+    if (a === 'delete') { const n = prompt(`"${b.dataset.name}" hesabı ve TÜM verileri (harcamalar, fişler, takvim bağlantısı) kalıcı olarak silinecek. Bu geri alınamaz.\n\nOnaylamak için kullanıcı adını yaz:`); if (n !== b.dataset.name) return n !== null && toast('Kullanıcı adı eşleşmedi, silinmedi'); }
+    else if (!confirm(ADM_CONFIRM[a])) return;
+    try { await api('/api/admin/user', { method: 'POST', body: JSON.stringify({ id: b.dataset.id, action: a }) }); toast({ logout: 'Oturumlar kapatıldı', disable: 'Erişim kesildi', enable: 'Erişim açıldı', delete: 'Hesap silindi' }[a]); loadAdmin(); }
+    catch (err) { toast(err.message); }
+  }
+  const d = e.target.closest('[data-anndel]');
+  if (d && confirm('Bu duyuru herkesten kaldırılsın mı?')) { try { await api('/api/admin/announcements?id=' + d.dataset.anndel, { method: 'DELETE' }); loadAdminAnn(); loadAnnouncements(); } catch (err) { toast(err.message); } }
+});
+document.addEventListener('submit', async e => {
+  if (e.target.id !== 'annForm') return; e.preventDefault(); const f = new FormData(e.target);
+  try { await api('/api/admin/announcements', { method: 'POST', body: JSON.stringify({ title: f.get('title'), body: f.get('body'), level: f.get('level') }) }); e.target.reset(); toast('Duyuru gönderildi'); loadAdminAnn(); loadAnnouncements(); }
+  catch (err) { toast(err.message); }
+});
+
+/* ========== Duyurular (zil) ========== */
+let announcements = [];
+const annSeenKey = () => 'mh_annseen_' + session?.user.id;
+async function loadAnnouncements() {
+  if (!session) return;
+  try { ({ announcements } = await api('/api/announcements')); } catch { return; }
+  const seen = load(annSeenKey()) || 0;
+  const n = announcements.filter(a => a.created_at > seen).length;
+  const badge = $('#bellBadge'); badge.hidden = !n; badge.textContent = n > 9 ? '9+' : n;
+}
+setInterval(loadAnnouncements, 10 * 60e3);
+document.addEventListener('click', e => {
+  if (!e.target.closest('#bellBtn')) return;
+  const seen = load(annSeenKey()) || 0;
+  openDlg(`<h3>${ic('bell')} Duyurular</h3>${announcements.length ? announcements.map(a => `<div class="ann ${a.level}"><b>${a.created_at > seen ? '<span class="pill bad" style="margin:0 6px 0 0">yeni</span>' : ''}${esc(a.title)}</b>
+    ${a.body ? `<div class="note" style="margin-top:4px">${esc(a.body)}</div>` : ''}<small>${ANN_LEVEL[a.level] || ''} · ${dt(a.created_at)}</small></div>`).join('') : '<p class="muted">Henüz duyuru yok.</p>'}
+    <div class="btns"><button class="btn ghost" data-close>Kapat</button></div>`);
+  if (announcements[0]) { store(annSeenKey(), announcements[0].created_at); $('#bellBadge').hidden = true; }
+});
+
 /* ========== Başlat ========== */
 function boot() {
   document.body.classList.remove('authmode');
@@ -743,7 +998,7 @@ function boot() {
     toast({ tamam: 'Google Takvim bağlandı ✓', iptal: 'Google bağlantısı iptal edildi', izin: 'Takvim izni verilmedi, tekrar dene ve kutucuğu işaretle', gecersiz: 'Bağlantı süresi doldu, tekrar dene', hata: 'Google bağlantısı kurulamadı' }[gq] || 'Google');
     state.tab = 'ayar';
   } else state.tab = 'ana';
-  render(); fetchPrices(); loadGoogle();
+  render(); fetchPrices(); loadGoogle(); loadAnnouncements();
   dirty ? push().then(pull) : pull();
 }
 if (session && !new URLSearchParams(location.search).get('davet')) { loadLocal(); boot(); }

@@ -5,27 +5,27 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Muhasebe</title>
 <meta name="theme-color" content="#0b1020">
+<meta name="color-scheme" content="light">
 <meta name="robots" content="noindex">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icon.svg">
+<link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="stylesheet" href="style.css?v=202611201519">
+<link rel="stylesheet" href="style.css?v=202611201802">
 </head>
-<body>
+<body data-tab="ana">
 <header class="top">
-  <div class="brand"><span id="title">Ana Sayfa</span> <span id="sync" class="sync" title="Senkron durumu"></span></div>
-  <button class="iconbtn" data-tab="ayar" aria-label="Ayarlar">⚙</button>
+  <div class="brand"><img src="icon.svg" alt=""><span id="title">Ana Sayfa</span><span id="sync" class="sync" title="Senkron durumu"></span></div>
+  <div class="topbtns">
+    <button class="iconbtn" id="saveBtn" title="Kaydet ve eşitle" aria-label="Kaydet ve eşitle"></button>
+    <button class="iconbtn" id="bellBtn" title="Duyurular" aria-label="Duyurular"></button>
+    <button class="iconbtn" id="gearBtn" data-tab="ayar" title="Ayarlar" aria-label="Ayarlar"></button>
+  </div>
 </header>
 <main id="view"></main>
-<nav class="tabs" id="tabs">
-  <button data-tab="ana"><span>⌂</span>Ana Sayfa</button>
-  <button data-tab="harcama"><span>₺</span>Harcamalar</button>
-  <button data-tab="yatirim"><span>◆</span>Yatırım</button>
-  <button data-tab="taksit"><span>▦</span>Taksitler</button>
-  <button data-tab="varlik"><span>⛨</span>Varlıklar</button>
-</nav>
+<div id="fabWrap"></div>
+<nav class="tabs" id="tabs"></nav>
 <div id="toast" class="toast"></div>
 <dialog id="dlg"><div id="dlgBody"></div></dialog>
-<script src="app.js?v=202611201519"></script>
+<script src="app.js?v=202611201802"></script>
 </body>
 </html>
