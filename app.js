@@ -322,7 +322,7 @@ document.addEventListener('change', e => { if (e.target.id === 'exMonth' && e.ta
 const loadScript = (src, integrity) => new Promise((ok, fail) => { if (document.querySelector(`script[src="${src}"]`)) return ok(); const s = document.createElement('script'); s.src = src; if (integrity) { s.integrity = integrity; s.crossOrigin = 'anonymous'; s.referrerPolicy = 'no-referrer'; } s.onload = ok; s.onerror = () => fail(new Error('Yüklenemedi: ' + src)); document.head.appendChild(s); });
 const JSZIP_URL = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
 const JSZIP_SRI = 'sha512-XMVd28F1oH/O71fzwBnV7HucLxVwtxf26XV8P4wPk26EDxuGZ91N8bsOttmnomcCD3CS5ZMRL50H0GgOHvegtg==';
-const loadXlsxLibs = async () => { await loadScript(JSZIP_URL, JSZIP_SRI); await loadScript('masraf.js?v=2'); };
+const loadXlsxLibs = async () => { await loadScript(JSZIP_URL, JSZIP_SRI); await loadScript('masraf.js?v=202611201513'); };
 
 /* Doldurulmuş masraf formunu içe aktar */
 async function importMasraf(file) {
