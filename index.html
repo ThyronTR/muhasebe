@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Muhasebe</title>
+<meta name="theme-color" content="#0b1020">
+<meta name="robots" content="noindex">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span id="title">Ana Sayfa</span> <span id="sync" class="sync" title="Senkron durumu"></span></div>
+  <button class="iconbtn" data-tab="ayar" aria-label="Ayarlar">⚙</button>
+</header>
+<main id="view"></main>
+<nav class="tabs" id="tabs">
+  <button data-tab="ana"><span>⌂</span>Ana Sayfa</button>
+  <button data-tab="harcama"><span>₺</span>Harcamalar</button>
+  <button data-tab="yatirim"><span>◆</span>Yatırım</button>
+  <button data-tab="taksit"><span>▦</span>Taksitler</button>
+  <button data-tab="varlik"><span>⛨</span>Varlıklar</button>
+</nav>
+<div id="toast" class="toast"></div>
+<dialog id="dlg"><div id="dlgBody"></div></dialog>
+<script src="app.js"></script>
+</body>
+</html>
