@@ -72,7 +72,8 @@ h2:first-child{margin-top:4px}
 .day:first-child{border-top:0}
 .empty{color:var(--muted);text-align:center;padding:24px}
 label{display:block;font-size:13px;color:var(--muted);margin:12px 0 4px}
-input,select,textarea{width:100%;padding:11px 12px;border:1px solid #d5dbe7;border-radius:10px;background:#fff;color:var(--fg)}
+/* 16px: iPhone 16px'ten küçük kutulara dokununca ekranı yakınlaştırıp kaydırıyor */
+input,select,textarea{font-size:16px;width:100%;padding:11px 12px;border:1px solid #d5dbe7;border-radius:10px;background:#fff;color:var(--fg)}
 input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(--sec) 40%,transparent);border-color:var(--sec)}
 select{appearance:none;-webkit-appearance:none;padding-right:36px;cursor:pointer;
   background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 14px center}

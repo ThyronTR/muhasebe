@@ -1,4 +1,6 @@
 'use strict';
+// Çalışan sürüm (index.html'deki app.js?v=…): önbellek teşhisi ve otomatik güncelleme için
+window.MY_VER = (document.querySelector('script[src^="app.js"]')?.getAttribute('src').match(/v=(\d+)/) || [])[1] || '';
 /* ========== Yardımcılar ========== */
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -84,6 +86,7 @@ let prices = load('mh_prices'); // {at, items:{KEY:{buy,sell,change}}}
 async function api(path, opts = {}) {
   const headers = { ...(opts.headers || {}) };
   if (session) headers.Authorization = 'Bearer ' + session.token;
+  if (window.MY_VER) headers['X-App-Ver'] = window.MY_VER;
   if (opts.body && typeof opts.body === 'string') headers['Content-Type'] = 'application/json';
   let r;
   try { r = await fetch(API + path, { ...opts, headers, cache: 'no-store' }); }
@@ -784,7 +787,8 @@ VIEWS.ayar = () => `
   <form id="catForm" class="row" style="margin-top:8px"><input name="c" placeholder="Yeni kategori" required><button class="btn">Ekle</button></form>
   <h2>Yedek</h2>
   <div class="btns"><button class="btn ghost" id="bkDown">Yedeği indir (JSON)</button><label class="btn ghost" style="margin:0;color:var(--fg)">Yedekten yükle<input type="file" id="bkUp" accept=".json" hidden></label></div>
-  <p class="muted" style="text-align:center;margin-top:24px"><a href="gizlilik.html">Gizlilik Politikası</a> · <a href="kosullar.html">Kullanım Koşulları</a></p>`;
+  <p class="muted" style="text-align:center;margin-top:24px"><a href="gizlilik.html">Gizlilik Politikası</a> · <a href="kosullar.html">Kullanım Koşulları</a><br>
+    Sürüm ${esc(MY_VER.replace(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})$/, '$3.$2.$1 $4:$5') || '—')} · <a href="#" id="forceUpd">Güncellemeyi denetle</a></p>`;
 async function loadInvites() {
   const box = $('#invList'); if (!box) return;
   try {
@@ -992,7 +996,7 @@ document.addEventListener('click', e => {
 /* ========== Otomatik güncelleme ==========
    GitHub Pages sayfayı 10 dk önbellekte tutar; telefon eski sürümde kalmasın diye index.html'deki
    sürüm numarasını önbelleksiz kontrol et, değiştiyse (form açık ve kaydedilmemiş değişiklik yoksa) yenile. */
-const MY_VER = (document.querySelector('script[src^="app.js"]')?.getAttribute('src').match(/v=(\d+)/) || [])[1];
+const MY_VER = window.MY_VER;
 async function checkUpdate() {
   if (!MY_VER) return;
   try {
@@ -1000,10 +1004,20 @@ async function checkUpdate() {
     const v = (html.match(/app\.js\?v=(\d+)/) || [])[1];
     if (!v || v === MY_VER) return;
     if (dlg.open || dirty) { setTimeout(checkUpdate, 30e3); return; }
-    toast('Yeni sürüm yükleniyor…'); setTimeout(() => location.reload(), 600);
+    // Farklı adres = önbellekteki eski sayfa kullanılamaz
+    toast('Yeni sürüm yükleniyor…'); setTimeout(() => location.replace(location.pathname + '?v=' + v), 600);
   } catch {}
 }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkUpdate(); });
+document.addEventListener('click', async e => {
+  if (!e.target.closest('#forceUpd')) return; e.preventDefault();
+  if (dirty) await push();
+  toast('Denetleniyor…');
+  const html = await (await fetch('./?nocache=' + Date.now(), { cache: 'no-store' })).text().catch(() => '');
+  const v = (html.match(/app\.js\?v=(\d+)/) || [])[1];
+  if (v && v !== MY_VER) { toast('Yeni sürüm yükleniyor…'); setTimeout(() => location.replace(location.pathname + '?v=' + v), 500); }
+  else toast('En güncel sürümü kullanıyorsun');
+});
 setInterval(checkUpdate, 5 * 60e3);
 setTimeout(checkUpdate, 3000);
 
